@@ -1,0 +1,436 @@
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users            User[]
+  departments      Department[]
+  tickets          Ticket[]
+  ticketStatuses   TicketStatus[]
+  ticketCategories TicketCategory[]
+  customFields     TicketCustomField[]
+  slaRules         SlaRule[]
+  workflows        Workflow[]
+  auditLogs        AuditLog[]
+
+  @@map("companies")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  roleId       String   @map("role_id")
+  companyId    String   @map("company_id")
+  active                 Boolean  @default(true)
+  changePasswordRequired Boolean  @default(true) @map("change_password_required")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  role             Role               @relation(fields: [roleId], references: [id])
+  company          Company            @relation(fields: [companyId], references: [id])
+  teams            UserTeam[]
+  departments      UserDepartment[]
+  ticketsRequested Ticket[]           @relation("RequesterTickets")
+  ticketsAssigned  Ticket[]           @relation("AttendantTickets")
+  comments         TicketComment[]
+  history          TicketHistory[]
+  uploads          TicketAttachment[] @relation("UploadedAttachments")
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+
+  @@index([companyId])
+  @@index([roleId])
+  @@map("users")
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  companyId String   @map("company_id")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company      Company             @relation(fields: [companyId], references: [id])
+  teams        Team[]
+  users        UserDepartment[]
+  tickets      Ticket[]
+  categories   TicketCategory[]
+  customFields TicketCustomField[]
+  slaRules     SlaRule[]
+  workflows    Workflow[]
+
+  @@index([companyId])
+  @@map("departments")
+}
+
+model Team {
+  id           String   @id @default(uuid())
+  name         String
+  departmentId String   @map("department_id")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department    Department     @relation(fields: [departmentId], references: [id])
+  members       UserTeam[]
+  tickets       Ticket[]
+  workflowSteps WorkflowStep[]
+
+  @@index([departmentId])
+  @@map("teams")
+}
+
+model UserTeam {
+  userId String @map("user_id")
+  teamId String @map("team_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([userId, teamId])
+  @@map("user_teams")
+}
+
+model TicketStatus {
+  id        String   @id @default(uuid())
+  name      String
+  color     String   @default("#94a3b8")
+  companyId String   @map("company_id")
+  isInitial Boolean  @default(false) @map("is_initial")
+  isFinal   Boolean  @default(false) @map("is_final")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company        @relation(fields: [companyId], references: [id])
+  tickets Ticket[]
+  steps   WorkflowStep[]
+
+  @@index([companyId])
+  @@map("ticket_status")
+}
+
+model TicketCategory {
+  id           String   @id @default(uuid())
+  name         String
+  departmentId String   @map("department_id")
+  companyId    String   @map("company_id")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  department Department @relation(fields: [departmentId], references: [id])
+  company    Company    @relation(fields: [companyId], references: [id])
+  tickets    Ticket[]
+  slaRules   SlaRule[]
+
+  @@index([departmentId])
+  @@index([companyId])
+  @@map("ticket_categories")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Ticket {
+  id           String    @id @default(uuid())
+  number       Int       @unique @default(autoincrement())
+  title        String
+  description  String    @db.Text
+  requesterId  String    @map("requester_id")
+  companyId    String    @map("company_id")
+  departmentId String    @map("department_id")
+  categoryId   String    @map("category_id")
+  priority     Priority  @default(MEDIUM)
+  impact       Severity  @default(MEDIUM)
+  urgency      Severity  @default(MEDIUM)
+  teamId       String?   @map("team_id")
+  attendantId  String?   @map("attendant_id")
+  statusId     String    @map("status_id")
+  slaDeadline  DateTime? @map("sla_deadline")
+  slaViolated  Boolean   @default(false) @map("sla_violated")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  closedAt     DateTime? @map("closed_at")
+
+  requester    User              @relation("RequesterTickets", fields: [requesterId], references: [id])
+  company      Company           @relation(fields: [companyId], references: [id])
+  department   Department        @relation(fields: [departmentId], references: [id])
+  category     TicketCategory    @relation(fields: [categoryId], references: [id])
+  team         Team?             @relation(fields: [teamId], references: [id])
+  attendant    User?             @relation("AttendantTickets", fields: [attendantId], references: [id])
+  status       TicketStatus      @relation(fields: [statusId], references: [id])
+  comments     TicketComment[]
+  history      TicketHistory[]
+  attachments  TicketAttachment[]
+  customValues TicketCustomValue[]
+
+  @@index([requesterId])
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([categoryId])
+  @@index([statusId])
+  @@index([attendantId])
+  @@index([teamId])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id         String   @id @default(uuid())
+  ticketId   String   @map("ticket_id")
+  userId     String   @map("user_id")
+  content    String   @db.Text
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@map("ticket_comments")
+}
+
+model TicketHistory {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  userId    String   @map("user_id")
+  action    String
+  oldValue  String?  @db.Text @map("old_value")
+  newValue  String?  @db.Text @map("new_value")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@map("ticket_history")
+}
+
+model TicketAttachment {
+  id           String   @id @default(uuid())
+  ticketId     String   @map("ticket_id")
+  name         String
+  path         String
+  mimeType     String   @map("mime_type")
+  size         Int
+  uploadedById String   @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation("UploadedAttachments", fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@index([uploadedById])
+  @@map("ticket_attachments")
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  SELECT
+  DATE
+  BOOLEAN
+}
+
+model TicketCustomField {
+  id           String          @id @default(uuid())
+  name         String
+  type         CustomFieldType @default(TEXT)
+  options      String?         @db.Text // Comma-separated values for SELECT
+  departmentId String          @map("department_id")
+  companyId    String          @map("company_id")
+  isRequired   Boolean         @default(false) @map("is_required")
+  active       Boolean         @default(true)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+
+  department Department          @relation(fields: [departmentId], references: [id])
+  company    Company             @relation(fields: [companyId], references: [id])
+  values     TicketCustomValue[]
+
+  @@index([departmentId])
+  @@index([companyId])
+  @@map("ticket_custom_fields")
+}
+
+model TicketCustomValue {
+  id        String   @id @default(uuid())
+  ticketId  String   @map("ticket_id")
+  fieldId   String   @map("field_id")
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ticket Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  field  TicketCustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, fieldId])
+  @@index([fieldId])
+  @@map("ticket_custom_values")
+}
+
+model SlaRule {
+  id                    String      @id @default(uuid())
+  name                  String
+  companyId             String      @map("company_id")
+  departmentId          String?     @map("department_id")
+  categoryId            String?     @map("category_id")
+  priority              Priority    @default(MEDIUM)
+  responseTimeMinutes   Int         @map("response_time_minutes")
+  resolutionTimeMinutes Int         @map("resolution_time_minutes")
+  active                Boolean     @default(true)
+  createdAt             DateTime    @default(now()) @map("created_at")
+  updatedAt             DateTime    @updatedAt @map("updated_at")
+
+  company    Company         @relation(fields: [companyId], references: [id])
+  department Department?     @relation(fields: [departmentId], references: [id])
+  category   TicketCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([companyId])
+  @@index([departmentId])
+  @@index([categoryId])
+  @@map("sla_rules")
+}
+
+model Workflow {
+  id           String         @id @default(uuid())
+  name         String
+  departmentId String         @map("department_id")
+  companyId    String         @map("company_id")
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  department Department     @relation(fields: [departmentId], references: [id])
+  company    Company        @relation(fields: [companyId], references: [id])
+  steps      WorkflowStep[]
+
+  @@index([departmentId])
+  @@index([companyId])
+  @@map("workflows")
+}
+
+model WorkflowStep {
+  id             String       @id @default(uuid())
+  workflowId     String       @map("workflow_id")
+  name           String
+  statusId       String       @map("status_id")
+  sequence       Int
+  nextStatusIds  String?      @db.Text @map("next_status_ids") // Comma-separated status IDs
+  approverRoleId String?      @map("approver_role_id")
+  assignedTeamId String?      @map("assigned_team_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  workflow     Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  status       TicketStatus @relation(fields: [statusId], references: [id])
+  assignedTeam Team?        @relation(fields: [assignedTeamId], references: [id])
+
+  @@index([workflowId])
+  @@index([statusId])
+  @@map("workflow_steps")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  title     String
+  message   String   @db.Text
+  read      Boolean  @default(false)
+  type      String   @default("IN_APP")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  companyId  String   @map("company_id")
+  action     String
+  entityName String   @map("entity_name")
+  entityId   String?  @map("entity_id")
+  details    String?  @db.Text
+  ipAddress  String?  @map("ip_address")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user    User?   @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+model UserDepartment {
+  userId       String     @map("user_id")
+  departmentId String     @map("department_id")
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, departmentId])
+  @@map("user_departments")
+}
