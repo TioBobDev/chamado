@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ChamadoFlow - Gestão Inteligente de Chamados (ITSM)',
+  title: 'Lumen - Gestão Inteligente de Chamados (ITSM)',
   description: 'Plataforma integrada multissetorial de chamados, workflows inteligentes e conformidade de SLAs.',
 };
 

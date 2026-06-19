@@ -57,13 +57,13 @@ export default function LoginPage() {
         {/* Glow accent border top */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400 to-purple-500"></div>
 
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">
-            <span className="text-gradient font-semibold">ChamadoFlow</span>
-          </h1>
-          <p className="text-sm text-slate-400">
-            Gerenciamento Multissetorial de Chamados (ITSM)
-          </p>
+        <div className="text-center mb-8 flex flex-col items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logo_lumen.png?v=2"
+            alt="Lumen Logo"
+            className="h-36 object-contain"
+          />
         </div>
 
         {error && (
@@ -129,7 +129,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-8 text-center text-xs text-slate-500 space-y-1">
-          <p>© 2026 ChamadoFlow S/A.</p>
+          <p>© 2026 @Dev.</p>
           <p className="text-[10px] text-slate-600">
             Ambiente Seguro e Monitorado para Auditoria
           </p>

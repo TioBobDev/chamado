@@ -103,10 +103,14 @@ export default async function DashboardLayout({
       <aside className="w-64 border-r border-slate-900 bg-[#0b0f19] flex flex-col justify-between shrink-0">
         <div>
           {/* Logo */}
-          <div className="h-16 flex items-center px-6 border-b border-slate-900">
-            <Link href="/dashboard" className="flex items-center gap-2">
-              <Briefcase className="text-sky-400" size={24} />
-              <span className="text-gradient font-bold text-xl">ChamadoFlow</span>
+          <div className="flex items-center justify-center px-6 py-4 border-b border-slate-900">
+            <Link href="/dashboard" className="flex items-center justify-center w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src="/logo_lumen_branco.png" 
+                alt="Lumen Logo" 
+                className="h-20 object-contain"
+              />
             </Link>
           </div>
 
