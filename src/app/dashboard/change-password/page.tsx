@@ -46,8 +46,7 @@ export default function ChangePasswordPage() {
       
       // Pequeno delay para exibir mensagem de sucesso antes do redirecionamento
       setTimeout(() => {
-        router.push('/dashboard');
-        router.refresh();
+        window.location.href = '/dashboard';
       }, 1500);
 
     } catch (err: any) {

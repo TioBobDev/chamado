@@ -91,6 +91,7 @@ export default function TicketDetailPage() {
   
   const [fileToUpload, setFileToUpload] = useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   
   // Listas auxiliares para alteração rápida (atendentes, status)
   const [availableStatuses, setAvailableStatuses] = useState<{ id: string; name: string }[]>([]);
@@ -131,10 +132,15 @@ export default function TicketDetailPage() {
   useEffect(() => {
     loadTicket();
     
-    // Identificar perfil do usuário de forma segura fazendo requisição para um stub leve
-    // Ou simplesmente decodificar a sessão do cookie no front de forma mockada para a UI.
-    // Vamos chamar o '/api/departments' e inferir a sessão do usuário ou ler a resposta do ticket
-    // O próprio ticket nos traz informações e conseguimos inferir.
+    // Identificar perfil do usuário logado
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((user) => {
+        if (user && user.id) {
+          setCurrentUser(user);
+        }
+      })
+      .catch((err) => console.error('Erro ao buscar dados da sessão:', err));
   }, [id]);
 
   // Define se o usuário atual é Atendente ou Admin baseado nos dados do ticket
@@ -336,24 +342,53 @@ export default function TicketDetailPage() {
               <p className="text-slate-500 text-xs italic">Nenhum anexo adicionado a este chamado.</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {ticket.attachments.map((file) => (
-                  <div key={file.id} className="p-3 bg-slate-950/20 border border-slate-900 rounded-xl flex items-center justify-between gap-3">
-                    <div className="overflow-hidden">
-                      <span className="block text-sm text-slate-300 truncate font-medium">{file.name}</span>
-                      <span className="text-[10px] text-slate-500 block">
-                        Por {file.uploadedBy.name} • {Math.round(file.size / 1024)} KB
-                      </span>
+                {ticket.attachments.map((file) => {
+                  const isImage = file.mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+                  return (
+                    <div key={file.id} className="p-3 bg-slate-950/20 border border-slate-900 rounded-xl flex flex-col justify-between gap-3">
+                      <div className="flex gap-3 items-center overflow-hidden">
+                        {isImage && (
+                          <div 
+                            className="w-12 h-12 rounded-lg overflow-hidden border border-slate-800 bg-slate-900/60 shrink-0 relative cursor-pointer hover:border-sky-400/50 transition-colors"
+                            onClick={() => setSelectedImageUrl(`/api/tickets/attachments/${file.id}/view`)}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img 
+                              src={`/api/tickets/attachments/${file.id}/view`} 
+                              alt={file.name} 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="overflow-hidden">
+                          <span className="block text-sm text-slate-300 truncate font-medium">{file.name}</span>
+                          <span className="text-[10px] text-slate-500 block">
+                            Por {file.uploadedBy.name} • {Math.round(file.size / 1024)} KB
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 justify-end border-t border-slate-900/30 pt-2">
+                        {isImage && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedImageUrl(`/api/tickets/attachments/${file.id}/view`)}
+                            className="text-xs text-sky-400 hover:text-sky-300 bg-sky-500/5 px-2.5 py-1.5 rounded-lg border border-sky-500/10 hover:border-sky-500/20 font-medium cursor-pointer"
+                          >
+                            Visualizar
+                          </button>
+                        )}
+                        {/* Botão de download seguro chamando o Route Handler de download protegido */}
+                        <a 
+                          href={`/api/tickets/attachments/${file.id}/download`}
+                          download
+                          className="text-xs text-slate-400 hover:text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 px-2.5 py-1.5 rounded-lg font-medium cursor-pointer"
+                        >
+                          Baixar
+                        </a>
+                      </div>
                     </div>
-                    {/* Botão de download seguro chamando o Route Handler de download protegido */}
-                    <a 
-                      href={`/api/tickets/attachments/${file.id}/download`}
-                      download
-                      className="text-xs text-sky-400 hover:text-sky-300 bg-sky-500/5 px-2.5 py-1.5 rounded-lg border border-sky-500/10 hover:border-sky-500/20 font-medium whitespace-nowrap cursor-pointer"
-                    >
-                      Baixar
-                    </a>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -510,9 +545,11 @@ export default function TicketDetailPage() {
                 className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs"
               >
                 <option value="">Sem Atendente</option>
-                {availableAttendants.map((att) => (
-                  <option key={att.id} value={att.id}>{att.name}</option>
-                ))}
+                {availableAttendants
+                  .filter((att) => att.id !== ticket.requester.id)
+                  .map((att) => (
+                    <option key={att.id} value={att.id}>{att.name}</option>
+                  ))}
               </select>
             </div>
 
@@ -594,6 +631,34 @@ export default function TicketDetailPage() {
         </div>
 
       </div>
+
+      {/* Lightbox Modal para visualizar imagens */}
+      {selectedImageUrl && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 cursor-pointer"
+          onClick={() => setSelectedImageUrl(null)}
+        >
+          <div 
+            className="relative max-w-4xl max-h-[85vh] overflow-hidden bg-slate-950 border border-slate-800 rounded-2xl p-2 flex flex-col items-center shadow-2xl cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Botão de Fechar */}
+            <button
+              onClick={() => setSelectedImageUrl(null)}
+              className="absolute top-4 right-4 p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all border border-slate-800 cursor-pointer z-10 font-bold"
+            >
+              ✕
+            </button>
+            {/* Imagem Ampliada */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={selectedImageUrl} 
+              alt="Visualização do Anexo" 
+              className="max-w-full max-h-[78vh] object-contain rounded-lg"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

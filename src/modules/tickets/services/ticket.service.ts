@@ -207,6 +207,9 @@ export class TicketService {
 
     // Validar e registrar alteração de Atendente/Equipe
     if (input.attendantId !== undefined && input.attendantId !== ticket.attendantId) {
+      if (input.attendantId && input.attendantId === ticket.requesterId) {
+        throw new ValidationError('O atendente não pode assumir ou ser designado para um chamado do qual ele é o solicitante.');
+      }
       updates.attendantId = input.attendantId;
       let oldName = ticket.attendant?.name || 'Sem atendente';
       let newName = 'Sem atendente';

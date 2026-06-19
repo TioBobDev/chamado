@@ -9,8 +9,8 @@ interface Ticket {
   id: string;
   number: number;
   title: string;
-  requester: { name: string };
-  attendant: { name: string } | null;
+  requester: { id: string; name: string };
+  attendant: { id: string; name: string } | null;
   department: { name: string };
   category: { name: string };
   status: { id: string; name: string; color: string };
@@ -24,6 +24,7 @@ export default function TicketQueuePage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null);
 
   // Filtros
   const [search, setSearch] = useState('');
@@ -42,6 +43,16 @@ export default function TicketQueuePage() {
   const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
+    // Carrega dados da sessão do usuário
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((user) => {
+        if (user && user.id) {
+          setCurrentUser(user);
+        }
+      })
+      .catch((err) => console.error('Erro ao obter sessão:', err));
+
     // Carrega filtros de status
     fetch('/api/departments')
       .then((res) => res.json())
@@ -313,12 +324,21 @@ export default function TicketQueuePage() {
                       )}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <Link 
-                        href={`/dashboard/tickets/${t.id}`}
-                        className="text-xs font-medium text-sky-400 hover:text-sky-300 bg-sky-500/5 border border-sky-500/10 hover:border-sky-500/30 px-3 py-1.5 rounded-lg transition-all"
-                      >
-                        Atender
-                      </Link>
+                      {currentUser && t.requester.id === currentUser.id ? (
+                        <Link 
+                          href={`/dashboard/tickets/${t.id}`}
+                          className="text-xs font-medium text-slate-400 hover:text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          Visualizar
+                        </Link>
+                      ) : (
+                        <Link 
+                          href={`/dashboard/tickets/${t.id}`}
+                          className="text-xs font-medium text-sky-400 hover:text-sky-300 bg-sky-500/5 border border-sky-500/10 hover:border-sky-500/30 px-3 py-1.5 rounded-lg transition-all"
+                        >
+                          Atender
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
