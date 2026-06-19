@@ -3,6 +3,7 @@ import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { security } from '@/shared/security/security';
 import Link from 'next/link';
+import NotificationBell from '@/components/NotificationBell';
 import { 
   FileText, 
   PlusCircle, 
@@ -164,15 +165,7 @@ export default async function DashboardLayout({
 
           {/* Notifications and Profile Icon */}
           <div className="flex items-center gap-4">
-            <button className="p-2 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-900/30 transition-all cursor-pointer relative">
-              <Bell size={20} />
-              {/* Notif Indicator badge */}
-              <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-purple-500 rounded-full border-2 border-[#090d16]"></span>
-            </button>
-            <div className="w-[1px] h-6 bg-slate-900"></div>
-            <div className="flex items-center gap-2 text-sm text-slate-300">
-              <span className="font-medium">Demo Tenant</span>
-            </div>
+            <NotificationBell />
           </div>
         </header>
 
