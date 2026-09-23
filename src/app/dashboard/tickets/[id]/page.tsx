@@ -15,7 +15,12 @@ import {
   CornerDownRight,
   EyeOff,
   Send,
-  Upload
+  Upload,
+  Play,
+  Users,
+  CheckCircle2,
+  Lock,
+  X
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatDateTime } from '@/shared/utils/utils';
@@ -45,7 +50,7 @@ interface TicketDetail {
   attendant: UserPayload | null;
   department: { id: string; name: string };
   category: { id: string; name: string };
-  status: { id: string; name: string; color: string };
+  status: { id: string; name: string; color: string; isFinal?: boolean };
   team: { id: string; name: string } | null;
   comments: {
     id: string;
@@ -99,8 +104,22 @@ export default function TicketDetailPage() {
   const [availableAttendants, setAvailableAttendants] = useState<{ id: string; name: string }[]>([]);
   const [updatingField, setUpdatingField] = useState<string | null>(null);
   
-  // Dados de sessão do usuário logado carregados do cookie para fins de RBAC na UI
-  const [currentUser, setCurrentUser] = useState<{ id: string; role: string } | null>(null);
+  // Dados de sessão do usuário logado
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string; name: string } | null>(null);
+
+  // Estados dos modais de fluxo
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferTargetId, setTransferTargetId] = useState('');
+  const [transferReason, setTransferReason] = useState('');
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [resolutionSummary, setResolutionSummary] = useState('');
+  const [closeLoading, setCloseLoading] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+
+  const [actionLoading, setActionLoading] = useState(false);
 
   const loadTicket = async () => {
     try {
@@ -144,16 +163,6 @@ export default function TicketDetailPage() {
       .catch((err) => console.error('Erro ao buscar dados da sessão:', err));
   }, [id]);
 
-  // Define se o usuário atual é Atendente ou Admin baseado nos dados do ticket
-  useEffect(() => {
-    if (ticket) {
-      // Simulação simples: se o requester é diferente do usuário e ele tem permissão de atendente,
-      // ele verá comentários internos. Para fins práticos na UI, faremos fetch simples
-      // ou leremos a role informada na sessão. 
-      // Para evitar chamadas extras, decodificamos a role do ticket
-    }
-  }, [ticket]);
-
   // Alterar campos rápidos (Status, Atendente, Prioridade)
   const handleFieldUpdate = async (fieldName: string, value: string | null) => {
     if (!ticket) return;
@@ -182,6 +191,117 @@ export default function TicketDetailPage() {
       setError(err.message);
     } finally {
       setUpdatingField(null);
+    }
+  };
+
+  // Ação: Iniciar Atendimento (Passa de Aberto -> Em Atendimento e atribui)
+  const handleStartAttendance = async () => {
+    if (!ticket || !currentUser) return;
+    setActionLoading(true);
+    setError(null);
+
+    try {
+      // Localiza o status "Em Atendimento"
+      const inProgressStatus = availableStatuses.find((s) => s.name === 'Em Atendimento');
+      const payload: any = {
+        statusId: inProgressStatus?.id || 'status-atendimento',
+      };
+
+      // Se não tiver atendente definido, autoatribui ao usuário logado
+      if (!ticket.attendant) {
+        payload.attendantId = currentUser.id;
+      }
+
+      const res = await apiFetch(`/api/tickets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || 'Erro ao iniciar atendimento.');
+      }
+
+      await loadTicket();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Ação: Transferir Atendimento
+  const handleTransferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transferTargetId) {
+      setTransferError('Selecione o atendente que receberá o chamado.');
+      return;
+    }
+
+    setTransferLoading(true);
+    setTransferError(null);
+
+    try {
+      const res = await apiFetch(`/api/tickets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attendantId: transferTargetId,
+          transferReason: transferReason.trim() || undefined,
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || 'Erro ao transferir atendimento.');
+      }
+
+      setShowTransferModal(false);
+      setTransferTargetId('');
+      setTransferReason('');
+      await loadTicket();
+    } catch (err: any) {
+      setTransferError(err.message);
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  // Ação: Encerrar Chamado
+  const handleCloseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolutionSummary.trim()) {
+      setCloseError('Por favor, informe a solução aplicada para encerrar o chamado.');
+      return;
+    }
+
+    setCloseLoading(true);
+    setCloseError(null);
+
+    try {
+      const closedStatus = availableStatuses.find((s) => s.name === 'Encerrado');
+      const res = await apiFetch(`/api/tickets/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          statusId: closedStatus?.id || 'status-encerrado',
+          resolutionSummary: resolutionSummary.trim(),
+        }),
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.message || 'Erro ao encerrar chamado.');
+      }
+
+      setShowCloseModal(false);
+      setResolutionSummary('');
+      await loadTicket();
+    } catch (err: any) {
+      setCloseError(err.message);
+    } finally {
+      setCloseLoading(false);
     }
   };
 
@@ -268,13 +388,32 @@ export default function TicketDetailPage() {
 
   if (!ticket) return null;
 
+  // Lógica de papéis e estados do chamado
+  const isClosed = ticket.status.isFinal || ticket.status.name === 'Encerrado';
+  const isAberto = ticket.status.name === 'Aberto';
+  const isEmAtendimento = ticket.status.name === 'Em Atendimento';
+
+  const userRole = currentUser?.role || '';
+  const canAct = ['Atendente', 'Coordenador', 'Administrador'].includes(userRole);
+  const isAssignedToMe = ticket.attendant?.id === currentUser?.id;
+  const isManagerOrAdmin = ['Coordenador', 'Administrador'].includes(userRole);
+
+  const canStartAttendance = isAberto && canAct && (!ticket.attendant || isAssignedToMe || isManagerOrAdmin);
+  const canTransfer = isEmAtendimento && (isAssignedToMe || isManagerOrAdmin);
+  const canClose = isEmAtendimento && (isAssignedToMe || isManagerOrAdmin);
+
+  // Lista de colegas para transferência (mesmo setor, exceto o atendente atual e solicitante)
+  const transferColleagues = availableAttendants.filter(
+    (att) => att.id !== ticket.attendant?.id && att.id !== ticket.requester.id
+  );
+
   return (
     <div className="space-y-6">
       {/* Top action header */}
       <div className="flex items-center justify-between">
         <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
           <Link 
-            href="/dashboard"
+            href="/dashboard/queue"
             className="p-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer shrink-0 mt-0.5 sm:mt-0"
           >
             <ArrowLeft size={18} />
@@ -283,7 +422,7 @@ export default function TicketDetailPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-slate-500 font-semibold text-base sm:text-lg">#{String(ticket.number).padStart(5, '0')}</span>
               <span 
-                className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border"
+                className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border"
                 style={{ 
                   backgroundColor: `${ticket.status.color}15`, 
                   borderColor: `${ticket.status.color}35`, 
@@ -292,6 +431,9 @@ export default function TicketDetailPage() {
               >
                 {ticket.status.name}
               </span>
+              <span className="text-xs text-slate-500">
+                • {ticket.department.name} &gt; {ticket.category.name}
+              </span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-slate-100 mt-1 break-words">{ticket.title}</h1>
           </div>
@@ -299,10 +441,116 @@ export default function TicketDetailPage() {
       </div>
 
       {error && (
-        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm">
-          {error}
+        <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-200 text-sm flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="text-red-400 hover:text-red-200">✕</button>
         </div>
       )}
+
+      {/* Painel de Fluxo e Ações Rápidas de Atendimento */}
+      {isClosed ? (
+        <div className="p-4 sm:p-5 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+              <CheckCircle2 size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-emerald-300">Chamado Encerrado Definitivamente</h4>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold border border-emerald-500/20">
+                  FINALIZADO
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Atendimento concluído em {ticket.closedAt ? new Date(ticket.closedAt).toLocaleString('pt-BR') : 'Data não registrada'}. Este chamado está arquivado e não pode ser reaberto.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 shrink-0 self-end sm:self-center">
+            <Lock size={14} />
+            <span>Registro travado</span>
+          </div>
+        </div>
+      ) : isAberto ? (
+        <div className="p-4 sm:p-5 rounded-2xl bg-sky-950/20 border border-sky-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 shrink-0">
+              <Clock size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-sky-300">Aguardando Início do Atendimento</h4>
+                <span className="px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 text-[10px] font-bold border border-sky-500/20">
+                  ABERTO
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {ticket.attendant 
+                  ? `Responsável designado: ${ticket.attendant.name}. Clique para assumir e dar início.`
+                  : 'Nenhum atendente iniciou este chamado ainda.'}
+              </p>
+            </div>
+          </div>
+          {canStartAttendance && (
+            <button
+              type="button"
+              onClick={handleStartAttendance}
+              disabled={actionLoading}
+              className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} className="fill-current" />}
+              Iniciar Atendimento
+            </button>
+          )}
+        </div>
+      ) : isEmAtendimento ? (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-950/20 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+              <AlertCircle size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-amber-300">Chamado em Atendimento</h4>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[10px] font-bold border border-amber-500/20">
+                  EM ANDAMENTO
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Atendente responsável: <span className="text-slate-200 font-semibold">{ticket.attendant?.name || 'Não atribuído'}</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 w-full sm:w-auto flex-wrap">
+            {canTransfer && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTransferModal(true);
+                  setTransferError(null);
+                }}
+                className="flex-1 sm:flex-initial px-4 py-2 bg-slate-900 hover:bg-slate-800 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/60 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <Users size={14} />
+                Transferir Atendimento
+              </button>
+            )}
+            {canClose && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCloseModal(true);
+                  setCloseError(null);
+                }}
+                className="flex-1 sm:flex-initial px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+              >
+                <CheckCircle2 size={15} />
+                Encerrar Chamado
+              </button>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       {/* Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -351,11 +599,11 @@ export default function TicketDetailPage() {
                         {isImage && (
                           <div 
                             className="w-12 h-12 rounded-lg overflow-hidden border border-slate-800 bg-slate-900/60 shrink-0 relative cursor-pointer hover:border-sky-400/50 transition-colors"
-                            onClick={() => setSelectedImageUrl(`/api/tickets/attachments/${file.id}/view`)}
+                            onClick={() => setSelectedImageUrl(withBasePath(`/api/tickets/attachments/${file.id}/view`))}
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img 
-                              src={`/api/tickets/attachments/${file.id}/view`} 
+                              src={withBasePath(`/api/tickets/attachments/${file.id}/view`)} 
                               alt={file.name} 
                               className="w-full h-full object-cover"
                             />
@@ -378,7 +626,6 @@ export default function TicketDetailPage() {
                             Visualizar
                           </button>
                         )}
-                        {/* Botão de download seguro chamando o Route Handler de download protegido */}
                         <a 
                           href={withBasePath(`/api/tickets/attachments/${file.id}/download`)}
                           download
@@ -393,24 +640,26 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            {/* File Upload Form */}
-            <form onSubmit={handleFileUpload} className="border-t border-slate-900 pt-4 flex flex-col sm:flex-row items-center gap-3">
-              <div className="relative flex-1 w-full">
-                <input 
-                  type="file" 
-                  onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-sky-400 hover:file:bg-slate-800 cursor-pointer"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={uploadingFile || !fileToUpload}
-                className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/50 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
-              >
-                {uploadingFile ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
-                Anexar Arquivo
-              </button>
-            </form>
+            {/* File Upload Form (Apenas se o chamado não estiver encerrado) */}
+            {!isClosed ? (
+              <form onSubmit={handleFileUpload} className="border-t border-slate-900 pt-4 flex flex-col sm:flex-row items-center gap-3">
+                <div className="relative flex-1 w-full">
+                  <input 
+                    type="file" 
+                    onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
+                    className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-slate-900 file:text-sky-400 hover:file:bg-slate-800 cursor-pointer"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={uploadingFile || !fileToUpload}
+                  className="w-full sm:w-auto px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700/50 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                >
+                  {uploadingFile ? <Loader2 className="animate-spin" size={14} /> : <Upload size={14} />}
+                  Anexar Arquivo
+                </button>
+              </form>
+            ) : null}
           </div>
 
           {/* Comments and timeline */}
@@ -455,39 +704,45 @@ export default function TicketDetailPage() {
             </div>
 
             {/* Add Comment Input Form */}
-            <form onSubmit={handleCommentSubmit} className="border-t border-slate-900 pt-4 space-y-3">
-              <textarea
-                rows={3}
-                placeholder="Insira um comentário ou resposta..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-200 py-3 px-4 focus:outline-none focus:border-sky-400 text-sm resize-none"
-              />
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                {/* Atendentes podem postar comentários internos */}
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="internal-comment"
-                    checked={isInternalComment}
-                    onChange={(e) => setIsInternalComment(e.target.checked)}
-                    className="w-4 h-4 bg-slate-950/40 border border-slate-800 rounded text-purple-400 focus:ring-purple-400"
-                  />
-                  <label htmlFor="internal-comment" className="text-xs font-medium text-slate-400 flex items-center gap-1 cursor-pointer">
-                    <EyeOff size={12} /> Comentário Interno (Oculto do Solicitante)
-                  </label>
-                </div>
+            {!isClosed ? (
+              <form onSubmit={handleCommentSubmit} className="border-t border-slate-900 pt-4 space-y-3">
+                <textarea
+                  rows={3}
+                  placeholder="Insira um comentário ou resposta..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-200 py-3 px-4 focus:outline-none focus:border-sky-400 text-sm resize-none"
+                />
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  {/* Atendentes podem postar comentários internos */}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      id="internal-comment"
+                      checked={isInternalComment}
+                      onChange={(e) => setIsInternalComment(e.target.checked)}
+                      className="w-4 h-4 bg-slate-950/40 border border-slate-800 rounded text-purple-400 focus:ring-purple-400"
+                    />
+                    <label htmlFor="internal-comment" className="text-xs font-medium text-slate-400 flex items-center gap-1 cursor-pointer">
+                      <EyeOff size={12} /> Comentário Interno (Oculto do Solicitante)
+                    </label>
+                  </div>
 
-                <button
-                  type="submit"
-                  disabled={submittingComment || !commentText.trim()}
-                  className="px-4 py-2 bg-gradient-to-r from-sky-400 to-purple-500 hover:from-sky-500 hover:to-purple-600 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
-                >
-                  {submittingComment ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-                  Enviar Comentário
-                </button>
+                  <button
+                    type="submit"
+                    disabled={submittingComment || !commentText.trim()}
+                    className="px-4 py-2 bg-gradient-to-r from-sky-400 to-purple-500 hover:from-sky-500 hover:to-purple-600 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer"
+                  >
+                    {submittingComment ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
+                    Enviar Comentário
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="border-t border-slate-900 pt-3 text-center text-xs text-slate-500 italic">
+                Chamado encerrado. O envio de novos comentários foi desabilitado.
               </div>
-            </form>
+            )}
           </div>
 
         </div>
@@ -499,7 +754,10 @@ export default function TicketDetailPage() {
           <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-5">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-sky-400/30"></div>
             
-            <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2">Controles Operacionais</h3>
+            <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2 flex items-center justify-between">
+              <span>Controles Operacionais</span>
+              {isClosed && <span className="text-[10px] text-slate-500 font-normal">Bloqueado</span>}
+            </h3>
 
             {/* SLA countdown bar */}
             {ticket.slaDeadline && (
@@ -521,29 +779,65 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            {/* Status update */}
+            {/* Status do Chamado */}
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Mudar Status</label>
-              <select
-                disabled={updatingField === 'statusId'}
-                value={ticket.status.id}
-                onChange={(e) => handleFieldUpdate('statusId', e.target.value)}
-                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs"
-              >
-                {availableStatuses.map((st) => (
-                  <option key={st.id} value={st.id}>{st.name}</option>
-                ))}
-              </select>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Status do Chamado</label>
+              {isEmAtendimento ? (
+                <div className="space-y-1.5">
+                  <div className="w-full bg-slate-950/40 border border-amber-500/30 rounded-xl text-amber-300 py-2.5 px-3 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                      Em Atendimento
+                    </span>
+                    <span className="text-[10px] text-amber-400/90 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20 font-medium">
+                      Ativo
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block leading-relaxed">
+                    Não pode retornar para &quot;Aberto&quot;. Transfira para outro colega ou encerre o chamado.
+                  </span>
+                </div>
+              ) : isClosed ? (
+                <div className="space-y-1.5">
+                  <div className="w-full bg-slate-950/40 border border-emerald-500/30 rounded-xl text-emerald-300 py-2.5 px-3 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <CheckCircle2 size={14} className="text-emerald-400" />
+                      Encerrado
+                    </span>
+                    <span className="text-[10px] text-emerald-400/90 bg-emerald-400/10 px-2 py-0.5 rounded-full border border-emerald-400/20 font-medium">
+                      Finalizado
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block leading-relaxed">
+                    Chamado encerrado definitivamente.
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="w-full bg-slate-950/40 border border-sky-500/30 rounded-xl text-sky-300 py-2.5 px-3 text-xs flex items-center justify-between">
+                    <span className="flex items-center gap-2 font-semibold">
+                      <Clock size={14} className="text-sky-400" />
+                      Aberto
+                    </span>
+                    <span className="text-[10px] text-sky-400/90 bg-sky-400/10 px-2 py-0.5 rounded-full border border-sky-400/20 font-medium">
+                      Aguardando
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block leading-relaxed">
+                    Clique em &quot;Iniciar Atendimento&quot; no topo para assumir.
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Assignee update */}
+            {/* Assignee update (Desabilitado se encerrado) */}
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Designar Responsável</label>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Responsável</label>
               <select
-                disabled={updatingField === 'attendantId'}
+                disabled={isClosed || updatingField === 'attendantId' || !isManagerOrAdmin}
                 value={ticket.attendant?.id || ''}
                 onChange={(e) => handleFieldUpdate('attendantId', e.target.value || null)}
-                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs"
+                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs disabled:opacity-50"
               >
                 <option value="">Sem Atendente</option>
                 {availableAttendants
@@ -552,16 +846,21 @@ export default function TicketDetailPage() {
                     <option key={att.id} value={att.id}>{att.name}</option>
                   ))}
               </select>
+              {!isManagerOrAdmin && !isClosed && (
+                <span className="text-[10px] text-slate-500 block">
+                  {canTransfer ? 'Use o botão "Transferir Atendimento" para passar a demanda.' : 'Apenas coordenadores podem reatribuir livremente.'}
+                </span>
+              )}
             </div>
 
-            {/* Priority update */}
+            {/* Priority update (Desabilitado se encerrado) */}
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Nível de Prioridade</label>
               <select
-                disabled={updatingField === 'priority'}
+                disabled={isClosed || updatingField === 'priority' || !canAct}
                 value={ticket.priority}
                 onChange={(e) => handleFieldUpdate('priority', e.target.value)}
-                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs"
+                className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-300 py-2.5 px-3 focus:outline-none focus:border-sky-400 text-xs disabled:opacity-50"
               >
                 <option value="LOW">Baixa</option>
                 <option value="MEDIUM">Média</option>
@@ -633,6 +932,162 @@ export default function TicketDetailPage() {
 
       </div>
 
+      {/* Modal: Transferir Atendimento */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-sky-400">
+                <Users size={20} />
+                <h3 className="font-bold text-base text-slate-100">Transferir Atendimento</h3>
+              </div>
+              <button 
+                onClick={() => setShowTransferModal(false)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Você pode transferir este chamado para outro membro do setor <strong className="text-sky-300">{ticket.department.name}</strong>. O status permanecerá em atendimento e o novo atendente será notificado.
+            </p>
+
+            {transferError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 text-xs rounded-xl">
+                {transferError}
+              </div>
+            )}
+
+            <form onSubmit={handleTransferSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Novo Atendente Responsável *
+                </label>
+                <select
+                  required
+                  value={transferTargetId}
+                  onChange={(e) => setTransferTargetId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl text-slate-200 py-2.5 px-3 text-xs focus:outline-none focus:border-sky-400"
+                >
+                  <option value="">Selecione um colega do setor...</option>
+                  {transferColleagues.map((colleague) => (
+                    <option key={colleague.id} value={colleague.id}>
+                      {colleague.name}
+                    </option>
+                  ))}
+                </select>
+                {transferColleagues.length === 0 && (
+                  <span className="text-[10px] text-amber-400 mt-1 block">
+                    Nenhum outro atendente cadastrado no setor {ticket.department.name}.
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Motivo da Transferência (Registrado no histórico)
+                </label>
+                <textarea
+                  rows={3}
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  placeholder="Ex: Demanda requer conhecimentos específicos de rede que o colega domina..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl text-slate-200 py-2.5 px-3 text-xs focus:outline-none focus:border-sky-400 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  disabled={transferLoading}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={transferLoading || !transferTargetId}
+                  className="px-5 py-2 bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {transferLoading ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
+                  Confirmar Transferência
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Encerrar Chamado */}
+      {showCloseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-emerald-400">
+                <CheckCircle2 size={20} />
+                <h3 className="font-bold text-base text-slate-100">Encerrar Chamado</h3>
+              </div>
+              <button 
+                onClick={() => setShowCloseModal(false)}
+                className="text-slate-400 hover:text-slate-200 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs rounded-xl flex items-start gap-2">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <span>
+                <strong>Importante:</strong> Após encerrado, este chamado <u>não poderá ser reaberto</u>. Certifique-se de que a demanda foi totalmente resolvida.
+              </span>
+            </div>
+
+            {closeError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-300 text-xs rounded-xl">
+                {closeError}
+              </div>
+            )}
+
+            <form onSubmit={handleCloseSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Solução Aplicada *
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={resolutionSummary}
+                  onChange={(e) => setResolutionSummary(e.target.value)}
+                  placeholder="Descreva de forma clara como a solicitação foi resolvida..."
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl text-slate-200 py-2.5 px-3 text-xs focus:outline-none focus:border-emerald-400 resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => setShowCloseModal(false)}
+                  disabled={closeLoading}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={closeLoading || !resolutionSummary.trim()}
+                  className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {closeLoading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  Confirmar Encerramento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Lightbox Modal para visualizar imagens */}
       {selectedImageUrl && (
         <div 
@@ -643,14 +1098,12 @@ export default function TicketDetailPage() {
             className="relative max-w-4xl max-h-[85vh] overflow-hidden bg-slate-950 border border-slate-800 rounded-2xl p-2 flex flex-col items-center shadow-2xl cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Botão de Fechar */}
             <button
               onClick={() => setSelectedImageUrl(null)}
               className="absolute top-4 right-4 p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-all border border-slate-800 cursor-pointer z-10 font-bold"
             >
               ✕
             </button>
-            {/* Imagem Ampliada */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={selectedImageUrl} 

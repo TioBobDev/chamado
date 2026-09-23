@@ -54,22 +54,13 @@ export default function TicketQueuePage() {
       })
       .catch((err) => console.error('Erro ao obter sessão:', err));
 
-    // Carrega filtros de status
-    apiFetch('/api/departments')
+    // Carrega filtros de status diretamente
+    apiFetch('/api/tickets/statuses')
       .then((res) => res.json())
-      .then((depts) => {
-        const statusList: { id: string; name: string }[] = [];
-        depts.forEach((dept: any) => {
-          if (dept.company && dept.company.ticketStatuses) {
-            dept.company.ticketStatuses.forEach((st: any) => {
-              if (!statusList.some((s) => s.id === st.id)) {
-                statusList.push({ id: st.id, name: st.name });
-              }
-            });
-          }
-        });
-        setStatuses(statusList);
-      });
+      .then((data) => {
+        setStatuses(data || []);
+      })
+      .catch((err) => console.error('Erro ao obter status:', err));
   }, []);
 
   const loadQueue = async () => {
@@ -292,7 +283,11 @@ export default function TicketQueuePage() {
                       {t.department.name} • {t.category.name}
                     </td>
                     <td className="py-4 px-6 text-slate-400 font-light">
-                      {t.attendant?.name || <span className="text-amber-500/80 italic text-xs">Aguardando...</span>}
+                      {t.attendant?.name || (
+                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full font-medium">
+                          Aguardando
+                        </span>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <span 

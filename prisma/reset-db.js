@@ -118,13 +118,11 @@ async function main() {
   }
   console.log('✓ Permissões vinculadas aos perfis.');
 
-  // 6. Status Padrão para Chamados
+  // 6. Status Padrão para Chamados (3 Estados Consolidados)
   const statuses = [
     { id: 'status-aberto', name: 'Aberto', color: '#3b82f6', isInitial: true, isFinal: false },
     { id: 'status-atendimento', name: 'Em Atendimento', color: '#f59e0b', isInitial: false, isFinal: false },
-    { id: 'status-aguardando', name: 'Aguardando Retorno', color: '#8b5cf6', isInitial: false, isFinal: false },
-    { id: 'status-resolvido', name: 'Resolvido', color: '#10b981', isInitial: false, isFinal: false },
-    { id: 'status-fechado', name: 'Fechado', color: '#6b7280', isInitial: false, isFinal: true },
+    { id: 'status-encerrado', name: 'Encerrado', color: '#10b981', isInitial: false, isFinal: true },
   ];
 
   for (const s of statuses) {

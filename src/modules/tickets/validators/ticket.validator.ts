@@ -30,6 +30,8 @@ export const updateTicketSchema = z.object({
   teamId: z.string().nullable().optional(),
   attendantId: z.string().nullable().optional(),
   priority: z.nativeEnum(Priority).optional(),
+  transferReason: z.string().optional(),
+  resolutionSummary: z.string().optional(),
 });
 
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;

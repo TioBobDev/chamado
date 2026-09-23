@@ -138,9 +138,19 @@ export class TicketService {
     }
 
     if (role === 'Atendente') {
-      const isAllowed = ticket.attendantId === userId || ticket.requesterId === userId;
+      const userDepts = await prisma.userDepartment.findMany({
+        where: { userId },
+        select: { departmentId: true },
+      });
+      const departmentIds = userDepts.map((ud) => ud.departmentId);
+
+      const isAllowed = 
+        ticket.attendantId === userId || 
+        ticket.requesterId === userId ||
+        (departmentIds.includes(ticket.departmentId) && ticket.attendantId === null);
+
       if (!isAllowed) {
-        throw new UnauthorizedError('Você não tem permissão para acessar ou interagir com este chamado (não atribuído a você).');
+        throw new UnauthorizedError('Você não tem permissão para acessar ou interagir com este chamado.');
       }
       return ticket;
     }
@@ -171,6 +181,11 @@ export class TicketService {
 
     const ticket = await this.checkTicketInteractionPermission(ticketId, userId, companyId, role);
 
+    // Bloqueio absoluto se o chamado já foi encerrado (Sem reabertura permitida)
+    if (ticket.status.isFinal || ticket.status.name === 'Encerrado') {
+      throw new ValidationError('Este chamado já foi encerrado e não pode ser reaberto ou modificado.');
+    }
+
     const updates: any = {};
     const historyPromises: any[] = [];
 
@@ -181,15 +196,33 @@ export class TicketService {
       });
       if (!status) throw new NotFoundError('Status de destino não encontrado.');
 
+      // Bloqueio de retrocesso: se estiver Em Atendimento, não pode voltar para Aberto
+      const isCurrentlyEmAtendimento = ticket.status.name === 'Em Atendimento' || ticket.statusId === 'status-atendimento';
+      const isTargetAberto = status.name === 'Aberto' || status.id === 'status-aberto' || status.isInitial;
+
+      if (isCurrentlyEmAtendimento && isTargetAberto) {
+        throw new ValidationError('Não é permitido alterar o status para "Aberto" após o início do atendimento. Você deve transferir o atendimento para outra pessoa do setor ou encerrar o chamado.');
+      }
+
       // Validação do motor de workflow e atribuições automáticas de equipe
       const workflowUpdates = await workflowService.validateAndRouteTransition(ticketId, input.statusId);
       Object.assign(updates, workflowUpdates);
 
       updates.statusId = input.statusId;
 
-      // Se passou para um status final, registrar data de encerramento
+      // Se passou para um status final, registrar data de encerramento e comentário de solução
       if (status.isFinal) {
         updates.closedAt = new Date();
+        if (input.resolutionSummary && input.resolutionSummary.trim()) {
+          historyPromises.push(
+            ticketRepository.addComment({
+              ticketId,
+              userId,
+              content: `✅ Solução do chamado: ${input.resolutionSummary.trim()}`,
+              isInternal: false,
+            })
+          );
+        }
       } else {
         updates.closedAt = null;
       }
@@ -205,11 +238,43 @@ export class TicketService {
       );
     }
 
-    // Validar e registrar alteração de Atendente/Equipe
+    // Validar e registrar alteração ou Transferência de Atendente
     if (input.attendantId !== undefined && input.attendantId !== ticket.attendantId) {
       if (input.attendantId && input.attendantId === ticket.requesterId) {
         throw new ValidationError('O atendente não pode assumir ou ser designado para um chamado do qual ele é o solicitante.');
       }
+
+      // Validação de Transferência de Atendimento
+      const isTransfer = !!(ticket.attendantId && input.attendantId && ticket.attendantId !== input.attendantId);
+
+      // Se for um perfil Atendente alterando o responsável:
+      if (role === 'Atendente' && input.attendantId !== null) {
+        const isSelfAssign = input.attendantId === userId;
+
+        if (!isSelfAssign) {
+          // 1. Só pode transferir quando o status for "Em Atendimento"
+          if (ticket.status.name !== 'Em Atendimento' && ticket.statusId !== 'status-atendimento') {
+            throw new ValidationError('A transferência de atendimento só é permitida quando o chamado estiver "Em Atendimento".');
+          }
+
+          // 2. Só pode transferir se for o próprio atendente atual do chamado
+          if (ticket.attendantId !== userId) {
+            throw new ValidationError('Você só pode transferir chamados que estão sob o seu próprio atendimento.');
+          }
+
+          // 3. Só pode transferir para alguém da MESMA equipe/setor do chamado
+          const targetUserDept = await prisma.userDepartment.findFirst({
+            where: {
+              userId: input.attendantId,
+              departmentId: ticket.departmentId,
+            },
+          });
+          if (!targetUserDept) {
+            throw new ValidationError('O chamado só pode ser transferido para membros da mesma equipe/setor.');
+          }
+        }
+      }
+
       updates.attendantId = input.attendantId;
       let oldName = ticket.attendant?.name || 'Sem atendente';
       let newName = 'Sem atendente';
@@ -221,15 +286,44 @@ export class TicketService {
         if (attendant) newName = attendant.name;
       }
 
+      const actionName = isTransfer ? 'Transferência de Atendimento' : 'Alteração de Responsável';
+      const historyDetail = input.transferReason && input.transferReason.trim()
+        ? `${newName} (Motivo: ${input.transferReason.trim()})`
+        : newName;
+
       historyPromises.push(
         ticketRepository.addHistory({
           ticketId,
           userId,
-          action: 'Alteração de Responsável',
+          action: actionName,
           oldValue: oldName,
-          newValue: newName,
+          newValue: historyDetail,
         })
       );
+
+      // Se for transferência e tiver motivo, registrar comentário interno
+      if (isTransfer && input.transferReason && input.transferReason.trim()) {
+        historyPromises.push(
+          ticketRepository.addComment({
+            ticketId,
+            userId,
+            content: `🔄 Atendimento transferido para ${newName}. Motivo: ${input.transferReason.trim()}`,
+            isInternal: true,
+          })
+        );
+      }
+
+      // Notificar novo atendente
+      if (input.attendantId && isTransfer) {
+        historyPromises.push(
+          notificationService.notify({
+            userId: input.attendantId,
+            title: `Chamado #${ticket.number} transferido para você`,
+            message: `O chamado #${ticket.number} foi transferido para seu atendimento por ${ticket.attendant?.name || 'um colega'}.`,
+            type: 'IN_APP',
+          })
+        );
+      }
     }
 
     // Validar e registrar alteração de Prioridade
@@ -271,6 +365,10 @@ export class TicketService {
 
   async addComment(ticketId: string, userId: string, companyId: string, input: AddCommentInput, userRole: string) {
     const ticket = await this.checkTicketInteractionPermission(ticketId, userId, companyId, userRole);
+
+    if (ticket.status.isFinal || ticket.status.name === 'Encerrado') {
+      throw new ValidationError('Não é possível adicionar comentários a um chamado que já foi encerrado.');
+    }
 
     // Solicitante não pode comentar em mensagens internas
     if (userRole === 'Solicitante' && input.isInternal) {

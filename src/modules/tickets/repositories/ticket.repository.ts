@@ -76,10 +76,20 @@ export class TicketRepository {
         ],
       };
     } else if (role === 'Atendente') {
+      const userDepts = await prisma.userDepartment.findMany({
+        where: { userId },
+        select: { departmentId: true },
+      });
+      const departmentIds = userDepts.map((ud) => ud.departmentId);
+
       visibilityCondition = {
         OR: [
           { attendantId: userId },
           { requesterId: userId },
+          {
+            departmentId: { in: departmentIds },
+            attendantId: null,
+          },
         ],
       };
     } else {
