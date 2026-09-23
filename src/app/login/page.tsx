@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema, LoginInput } from '@/modules/authentication/validators/auth.validator';
 import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -94,9 +95,17 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Senha de Acesso
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Senha de Acesso
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs text-sky-400 hover:text-sky-300 transition-colors"
+              >
+                Esqueceu sua senha?
+              </Link>
+            </div>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
                 <Lock size={18} />

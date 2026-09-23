@@ -84,6 +84,7 @@ model User {
   uploads          TicketAttachment[] @relation("UploadedAttachments")
   notifications    Notification[]
   auditLogs        AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([companyId])
   @@index([roleId])
@@ -433,4 +434,18 @@ model UserDepartment {
 
   @@id([userId, departmentId])
   @@map("user_departments")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }

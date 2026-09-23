@@ -1,5 +1,5 @@
 import { authService } from '../services/auth.service';
-import { loginSchema } from '../validators/auth.validator';
+import { loginSchema, forgotPasswordSchema, resetPasswordSchema } from '../validators/auth.validator';
 import { handleApiError, ValidationError } from '@/shared/errors/errors';
 import { cookies } from 'next/headers';
 
@@ -57,6 +57,59 @@ export class AuthController {
       return handleApiError(error);
     }
   }
+
+  async forgotPassword(req: Request) {
+    try {
+      const body = await req.json();
+      const validation = forgotPasswordSchema.safeParse(body);
+
+      if (!validation.success) {
+        const errors: Record<string, string[]> = {};
+        for (const issue of validation.error.issues) {
+          const path = issue.path.join('.');
+          if (!errors[path]) {
+            errors[path] = [];
+          }
+          errors[path].push(issue.message);
+        }
+        throw new ValidationError('Erro de validação ao solicitar redefinição de senha', errors);
+      }
+
+      const { email } = validation.data;
+      const result = await authService.requestPasswordReset(email);
+
+      return Response.json(result);
+    } catch (error) {
+      return handleApiError(error);
+    }
+  }
+
+  async resetPassword(req: Request) {
+    try {
+      const body = await req.json();
+      const validation = resetPasswordSchema.safeParse(body);
+
+      if (!validation.success) {
+        const errors: Record<string, string[]> = {};
+        for (const issue of validation.error.issues) {
+          const path = issue.path.join('.');
+          if (!errors[path]) {
+            errors[path] = [];
+          }
+          errors[path].push(issue.message);
+        }
+        throw new ValidationError('Erro de validação ao redefinir senha', errors);
+      }
+
+      const { token, password } = validation.data;
+      const result = await authService.resetPassword(token, password);
+
+      return Response.json(result);
+    } catch (error) {
+      return handleApiError(error);
+    }
+  }
 }
 
 export const authController = new AuthController();
+
