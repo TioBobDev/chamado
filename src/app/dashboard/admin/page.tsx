@@ -15,6 +15,7 @@ import {
   Edit2,
   X
 } from 'lucide-react';
+import { apiFetch } from '@/shared/utils/api';
 
 interface UserData {
   id: string;
@@ -68,9 +69,9 @@ export default function UsersManagementPage() {
     try {
       const queryParams = search ? `?search=${encodeURIComponent(search)}` : '';
       const [resUsers, resRoles, resDepts] = await Promise.all([
-        fetch(`/api/admin/users${queryParams}`),
-        fetch('/api/admin/roles'),
-        fetch('/api/departments'),
+        apiFetch(`/api/admin/users${queryParams}`),
+        apiFetch('/api/admin/roles'),
+        apiFetch('/api/departments'),
       ]);
 
       if (resUsers.ok) {
@@ -130,7 +131,7 @@ export default function UsersManagementPage() {
         payload.active = newUserActive;
       }
 
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -162,7 +163,7 @@ export default function UsersManagementPage() {
   const handleToggleUserActive = async (user: UserData) => {
     clearMessages();
     try {
-      const res = await fetch(`/api/admin/users/${user.id}`, {
+      const res = await apiFetch(`/api/admin/users/${user.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !user.active }),

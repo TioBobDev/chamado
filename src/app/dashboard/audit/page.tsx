@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldAlert, Loader2, AlertCircle } from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
+import { apiFetch } from '@/shared/utils/api';
 
 interface AuditLog {
   id: string;
@@ -21,7 +22,7 @@ export default function AuditPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/audit')
+    apiFetch('/api/audit')
       .then((res) => {
         if (!res.ok) throw new Error('Não foi possível carregar os logs.');
         return res.json();

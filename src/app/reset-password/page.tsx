@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { Lock, Loader2, CheckCircle2, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { apiFetch } from '@/shared/utils/api';
 
 interface ResetPasswordFormData {
   password: string;
@@ -56,7 +57,7 @@ function ResetPasswordContent() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await apiFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

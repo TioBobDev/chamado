@@ -26,23 +26,30 @@ export function middleware(request: NextRequest) {
   const token = request.cookies.get(cookieName)?.value;
   const { pathname } = request.nextUrl;
 
+  // Função auxiliar para redirecionar preservando o basePath configurado
+  const redirectTo = (path: string) => {
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    return NextResponse.redirect(url);
+  };
+
   // 1. Verificar se a rota é do painel de controle (dashboard)
   if (pathname.startsWith('/dashboard')) {
     if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return redirectTo('/login');
     }
 
     const payload = decodeJwtPayload(token);
     // Token corrompido ou expirado
     if (!payload || (payload.exp && Date.now() >= payload.exp * 1000)) {
-      const response = NextResponse.redirect(new URL('/login', request.url));
+      const response = redirectTo('/login');
       response.cookies.delete(cookieName);
       return response;
     }
 
     // 2. Forçar alteração de senha no primeiro acesso
     if (payload.changePasswordRequired === true && pathname !== '/dashboard/change-password') {
-      return NextResponse.redirect(new URL('/dashboard/change-password', request.url));
+      return redirectTo('/dashboard/change-password');
     }
 
     // 3. Proteção de rotas administrativas
@@ -50,7 +57,7 @@ export function middleware(request: NextRequest) {
       const userRole = payload.role;
       if (userRole !== 'Administrador') {
         // Redireciona solicitantes/atendentes de volta ao painel comum
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        return redirectTo('/dashboard');
       }
     }
   }
@@ -59,7 +66,7 @@ export function middleware(request: NextRequest) {
   if (pathname.startsWith('/login') && token) {
     const payload = decodeJwtPayload(token);
     if (payload && (!payload.exp || Date.now() < payload.exp * 1000)) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      return redirectTo('/dashboard');
     }
   }
 

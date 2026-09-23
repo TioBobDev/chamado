@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { Bell } from 'lucide-react';
+import { apiFetch } from '@/shared/utils/api';
 
 interface NotificationItem {
   id: string;
@@ -20,7 +21,7 @@ export default function NotificationBell() {
   // Carrega as notificações do usuário
   const fetchNotifications = async () => {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await apiFetch('/api/notifications');
       if (res.ok) {
         const data = await res.json();
         setNotifications(data.notifications || []);
@@ -60,7 +61,7 @@ export default function NotificationBell() {
       setUnreadCount(0);
       
       try {
-        await fetch('/api/notifications', { method: 'PATCH' });
+        await apiFetch('/api/notifications', { method: 'PATCH' });
         // Recarrega lista para atualizar status de "read" visualmente
         fetchNotifications();
       } catch (err) {

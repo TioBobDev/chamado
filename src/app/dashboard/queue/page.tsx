@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Search, Filter, AlertTriangle, CheckCircle, Clock, Layers, UserCheck } from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
+import { apiFetch } from '@/shared/utils/api';
 
 interface Ticket {
   id: string;
@@ -44,7 +45,7 @@ export default function TicketQueuePage() {
 
   useEffect(() => {
     // Carrega dados da sessão do usuário
-    fetch('/api/auth/me')
+    apiFetch('/api/auth/me')
       .then((res) => res.json())
       .then((user) => {
         if (user && user.id) {
@@ -54,7 +55,7 @@ export default function TicketQueuePage() {
       .catch((err) => console.error('Erro ao obter sessão:', err));
 
     // Carrega filtros de status
-    fetch('/api/departments')
+    apiFetch('/api/departments')
       .then((res) => res.json())
       .then((depts) => {
         const statusList: { id: string; name: string }[] = [];
@@ -84,7 +85,7 @@ export default function TicketQueuePage() {
       if (statusId) params.append('statusId', statusId);
       if (priority) params.append('priority', priority);
 
-      const response = await fetch(`/api/tickets?${params.toString()}`);
+      const response = await apiFetch(`/api/tickets?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Falha ao carregar fila de chamados.');
       }

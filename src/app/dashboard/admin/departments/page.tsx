@@ -12,6 +12,7 @@ import {
   Briefcase,
   HelpCircle
 } from 'lucide-react';
+import { apiFetch } from '@/shared/utils/api';
 
 interface DeptData {
   id: string;
@@ -47,7 +48,7 @@ export default function SectorsAndCategoriesPage() {
   // Carregar dados de topologia
   const loadTopology = async () => {
     try {
-      const res = await fetch('/api/departments');
+      const res = await apiFetch('/api/departments');
       if (res.ok) {
         const data = await res.json();
         setDepartments(data);
@@ -75,7 +76,7 @@ export default function SectorsAndCategoriesPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch('/api/admin/departments', {
+      const res = await apiFetch('/api/admin/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newDeptName }),
@@ -103,7 +104,7 @@ export default function SectorsAndCategoriesPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch('/api/admin/categories', {
+      const res = await apiFetch('/api/admin/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCatName, departmentId: newCatDeptId }),
@@ -132,7 +133,7 @@ export default function SectorsAndCategoriesPage() {
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/admin/departments/${newFieldDeptId}/fields`, {
+      const res = await apiFetch(`/api/admin/departments/${newFieldDeptId}/fields`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -166,7 +167,7 @@ export default function SectorsAndCategoriesPage() {
 
     clearMessages();
     try {
-      const res = await fetch(`/api/admin/departments/${deptId}/fields?fieldId=${fieldId}`, {
+      const res = await apiFetch(`/api/admin/departments/${deptId}/fields?fieldId=${fieldId}`, {
         method: 'DELETE',
       });
       const data = await res.json();

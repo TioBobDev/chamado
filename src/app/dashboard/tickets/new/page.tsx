@@ -5,6 +5,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, Save, FilePlus2, CheckCircle2, Paperclip, X, PlusCircle } from 'lucide-react';
 import Link from 'next/link';
+import { apiFetch } from '@/shared/utils/api';
 
 interface Department {
   id: string;
@@ -63,7 +64,7 @@ export default function NewTicketPage() {
 
   // Carrega os departamentos no início
   useEffect(() => {
-    fetch('/api/departments?excludeMyDepartments=true')
+    apiFetch('/api/departments?excludeMyDepartments=true')
       .then((res) => res.json())
       .then((data) => {
         setDepartments(data);
@@ -91,7 +92,7 @@ export default function NewTicketPage() {
 
     // Carregar campos customizados
     setLoadingFields(true);
-    fetch(`/api/departments/${watchedDeptId}/fields`)
+    apiFetch(`/api/departments/${watchedDeptId}/fields`)
       .then((res) => res.json())
       .then((fields) => {
         setCustomFields(fields);
@@ -126,7 +127,7 @@ export default function NewTicketPage() {
     };
 
     try {
-      const response = await fetch('/api/tickets', {
+      const response = await apiFetch('/api/tickets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -156,7 +157,7 @@ export default function NewTicketPage() {
         const formData = new FormData();
         formData.append('file', selectedFile);
 
-        const attachRes = await fetch(`/api/tickets/${result.id}/attachments`, {
+        const attachRes = await apiFetch(`/api/tickets/${result.id}/attachments`, {
           method: 'POST',
           body: formData,
         });

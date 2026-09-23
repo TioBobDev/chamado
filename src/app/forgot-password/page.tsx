@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { forgotPasswordSchema, ForgotPasswordInput } from '@/modules/authentication/validators/auth.validator';
 import { Mail, Loader2, ArrowLeft, Send, CheckCircle2, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
+import { apiFetch } from '@/shared/utils/api';
 
 export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/forgot-password', {
+      const response = await apiFetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

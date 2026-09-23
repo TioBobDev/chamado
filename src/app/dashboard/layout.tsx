@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { security } from '@/shared/security/security';
 import Link from 'next/link';
 import NotificationBell from '@/components/NotificationBell';
+import { withBasePath } from '@/shared/utils/api';
 import { 
   FileText, 
   PlusCircle, 
@@ -148,7 +149,7 @@ export default async function DashboardLayout({
         {/* Footer Sidebar */}
         <div className="p-4 border-t border-slate-900">
           <a
-            href="/api/auth/logout"
+            href={withBasePath('/api/auth/logout')}
             className="flex items-center gap-3 px-4 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/5 rounded-xl transition-all text-sm font-medium"
           >
             <LogOut size={20} />

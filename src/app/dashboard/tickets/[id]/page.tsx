@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatDateTime } from '@/shared/utils/utils';
+import { apiFetch, withBasePath } from '@/shared/utils/api';
 
 interface UserPayload {
   id: string;
@@ -103,7 +104,7 @@ export default function TicketDetailPage() {
 
   const loadTicket = async () => {
     try {
-      const res = await fetch(`/api/tickets/${id}`);
+      const res = await apiFetch(`/api/tickets/${id}`);
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.message || 'Falha ao buscar detalhes.');
@@ -113,8 +114,8 @@ export default function TicketDetailPage() {
       
       // Busca status e atendentes disponíveis da empresa filtrados pelo setor do chamado
       Promise.all([
-        fetch('/api/tickets/statuses').then((r) => r.json()),
-        fetch(`/api/tickets/attendants?departmentId=${data.department.id}`).then((r) => r.json())
+        apiFetch('/api/tickets/statuses').then((r) => r.json()),
+        apiFetch(`/api/tickets/attendants?departmentId=${data.department.id}`).then((r) => r.json())
       ])
         .then(([statuses, attendants]) => {
           setAvailableStatuses(statuses || []);
@@ -133,7 +134,7 @@ export default function TicketDetailPage() {
     loadTicket();
     
     // Identificar perfil do usuário logado
-    fetch('/api/auth/me')
+    apiFetch('/api/auth/me')
       .then((r) => r.json())
       .then((user) => {
         if (user && user.id) {
@@ -165,7 +166,7 @@ export default function TicketDetailPage() {
       if (fieldName === 'attendantId') payload.attendantId = value;
       if (fieldName === 'priority') payload.priority = value;
 
-      const res = await fetch(`/api/tickets/${id}`, {
+      const res = await apiFetch(`/api/tickets/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -193,7 +194,7 @@ export default function TicketDetailPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/tickets/${id}/comments`, {
+      const res = await apiFetch(`/api/tickets/${id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -229,7 +230,7 @@ export default function TicketDetailPage() {
       const formData = new FormData();
       formData.append('file', fileToUpload);
 
-      const res = await fetch(`/api/tickets/${id}/attachments`, {
+      const res = await apiFetch(`/api/tickets/${id}/attachments`, {
         method: 'POST',
         body: formData,
       });
@@ -371,7 +372,7 @@ export default function TicketDetailPage() {
                         {isImage && (
                           <button
                             type="button"
-                            onClick={() => setSelectedImageUrl(`/api/tickets/attachments/${file.id}/view`)}
+                            onClick={() => setSelectedImageUrl(withBasePath(`/api/tickets/attachments/${file.id}/view`))}
                             className="text-xs text-sky-400 hover:text-sky-300 bg-sky-500/5 px-2.5 py-1.5 rounded-lg border border-sky-500/10 hover:border-sky-500/20 font-medium cursor-pointer"
                           >
                             Visualizar
@@ -379,7 +380,7 @@ export default function TicketDetailPage() {
                         )}
                         {/* Botão de download seguro chamando o Route Handler de download protegido */}
                         <a 
-                          href={`/api/tickets/attachments/${file.id}/download`}
+                          href={withBasePath(`/api/tickets/attachments/${file.id}/download`)}
                           download
                           className="text-xs text-slate-400 hover:text-slate-300 bg-slate-900 border border-slate-800 hover:border-slate-700 px-2.5 py-1.5 rounded-lg font-medium cursor-pointer"
                         >

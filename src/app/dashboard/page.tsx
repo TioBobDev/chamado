@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Search, Filter, AlertCircle, Clock, ChevronLeft, ChevronRight, PlusCircle } from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
+import { apiFetch } from '@/shared/utils/api';
 
 interface Ticket {
   id: string;
@@ -41,7 +42,7 @@ export default function DashboardPage() {
   useEffect(() => {
     // Busca departamentos e consequentemente traz os status no seed ou podemos fazer rota,
     // mas para simplificar faremos um fetch rápido
-    fetch('/api/departments')
+    apiFetch('/api/departments')
       .then((res) => res.json())
       .then((depts) => {
         // Coleta status únicos cadastrados na empresa
@@ -94,7 +95,7 @@ export default function DashboardPage() {
       if (statusId) params.append('statusId', statusId);
       if (priority) params.append('priority', priority);
 
-      const response = await fetch(`/api/tickets?${params.toString()}`);
+      const response = await apiFetch(`/api/tickets?${params.toString()}`);
       if (!response.ok) {
         throw new Error('Falha ao carregar os chamados.');
       }

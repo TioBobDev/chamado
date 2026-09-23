@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { logger } from '@/shared/logger/logger';
 
 export interface SendEmailOptions {
@@ -9,7 +9,7 @@ export interface SendEmailOptions {
 }
 
 export class EmailService {
-  private transporter: nodemailer.Transporter | null = null;
+  private transporter: Transporter | null = null;
 
   constructor() {
     this.initTransporter();

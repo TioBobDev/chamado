@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { Lock, Loader2, ShieldAlert, KeyRound } from 'lucide-react';
+import { apiFetch, withBasePath } from '@/shared/utils/api';
 
 interface ChangePasswordForm {
   password: string;
@@ -30,7 +31,7 @@ export default function ChangePasswordPage() {
     setError(null);
 
     try {
-      const response = await fetch('/api/auth/change-password', {
+      const response = await apiFetch('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: data.password }),
@@ -46,7 +47,7 @@ export default function ChangePasswordPage() {
       
       // Pequeno delay para exibir mensagem de sucesso antes do redirecionamento
       setTimeout(() => {
-        window.location.href = '/dashboard';
+        window.location.href = withBasePath('/dashboard');
       }, 1500);
 
     } catch (err: any) {
