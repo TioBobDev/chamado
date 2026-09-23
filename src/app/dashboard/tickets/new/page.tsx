@@ -208,7 +208,7 @@ export default function NewTicketPage() {
       )}
 
       {/* Main Form Card */}
-      <form onSubmit={handleSubmit(onSubmit)} className="glass-panel p-8 rounded-2xl relative overflow-hidden space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="glass-panel p-4 sm:p-6 md:p-8 rounded-2xl relative overflow-hidden space-y-6">
         {/* Glow border */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400 to-purple-500"></div>
 
@@ -432,7 +432,7 @@ export default function NewTicketPage() {
           <div className="space-y-2">
             <p className="text-xs text-slate-400">Se desejar, anexe uma imagem (print screen ou foto) para ajudar na resolução do problema (limite de 10MB).</p>
             
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-2 px-4 py-2.5 bg-slate-950/40 border border-slate-800 hover:border-sky-400 rounded-xl text-xs font-medium text-slate-300 hover:text-slate-100 transition-all cursor-pointer select-none">
                 <PlusCircle size={14} className="text-sky-400" /> Selecionar Imagem
                 <input

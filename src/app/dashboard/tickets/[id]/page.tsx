@@ -272,16 +272,16 @@ export default function TicketDetailPage() {
     <div className="space-y-6">
       {/* Top action header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0">
           <Link 
             href="/dashboard"
-            className="p-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer"
+            className="p-2 bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-xl transition-all cursor-pointer shrink-0 mt-0.5 sm:mt-0"
           >
             <ArrowLeft size={18} />
           </Link>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-semibold text-lg">#{String(ticket.number).padStart(5, '0')}</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-slate-500 font-semibold text-base sm:text-lg">#{String(ticket.number).padStart(5, '0')}</span>
               <span 
                 className="inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border"
                 style={{ 
@@ -293,7 +293,7 @@ export default function TicketDetailPage() {
                 {ticket.status.name}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-100 mt-1">{ticket.title}</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-100 mt-1 break-words">{ticket.title}</h1>
           </div>
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function TicketDetailPage() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* Main Description */}
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-sky-400/30"></div>
             <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2">Descrição da Solicitação</h3>
             <p className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">{ticket.description}</p>
@@ -333,7 +333,7 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Attachments Section */}
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-purple-400/30"></div>
             <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2 flex items-center gap-2">
               <Paperclip size={18} /> Anexos e Documentos
@@ -414,7 +414,7 @@ export default function TicketDetailPage() {
           </div>
 
           {/* Comments and timeline */}
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400/30 to-purple-400/30"></div>
             <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2 flex items-center gap-2">
               <MessageSquare size={18} /> Histórico de Comentários
@@ -496,7 +496,7 @@ export default function TicketDetailPage() {
         <div className="space-y-6">
           
           {/* Metadata Controls */}
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-5">
+          <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-5">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-sky-400/30"></div>
             
             <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2">Controles Operacionais</h3>
@@ -595,7 +595,7 @@ export default function TicketDetailPage() {
           </div>
 
           {/* History/Audit Timeline */}
-          <div className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <div className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-purple-400/30"></div>
             <h3 className="font-semibold text-sm text-slate-300 border-b border-slate-900 pb-2 flex items-center gap-2">
               <History size={18} /> Linha do Tempo (Auditoria)

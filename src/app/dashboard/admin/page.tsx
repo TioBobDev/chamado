@@ -250,7 +250,7 @@ export default function UsersManagementPage() {
         
         {/* User Form Column (Switches between CREATE and EDIT) */}
         <div className="lg:col-span-1">
-          <form onSubmit={handleUserFormSubmit} className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <form onSubmit={handleUserFormSubmit} className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             {/* Highlight bar matches status */}
             <div 
               className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${

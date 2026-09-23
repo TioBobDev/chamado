@@ -55,7 +55,7 @@ export default function LoginPage() {
       <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-sky-500/10 rounded-full blur-3xl -z-10 animate-pulse"></div>
       <div className="absolute bottom-1/4 right-1/4 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl -z-10 animate-pulse" style={{ animationDelay: '2s' }}></div>
 
-      <div className="w-full max-w-md glass-panel p-8 rounded-2xl relative overflow-hidden">
+      <div className="w-full max-w-md glass-panel p-6 sm:p-8 rounded-2xl relative overflow-hidden">
         {/* Glow accent border top */}
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-sky-400 to-purple-500"></div>
 

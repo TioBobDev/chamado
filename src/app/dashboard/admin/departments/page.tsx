@@ -221,7 +221,7 @@ export default function SectorsAndCategoriesPage() {
         <div className="lg:col-span-1 space-y-6">
           
           {/* Create Department Form */}
-          <form onSubmit={handleCreateDepartment} className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <form onSubmit={handleCreateDepartment} className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-sky-400/40"></div>
             <h3 className="font-semibold text-sm text-slate-200 flex items-center gap-1.5">
               <PlusCircle size={16} className="text-sky-400" /> Cadastrar Novo Setor
@@ -249,7 +249,7 @@ export default function SectorsAndCategoriesPage() {
           </form>
 
           {/* Create Category Form */}
-          <form onSubmit={handleCreateCategory} className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <form onSubmit={handleCreateCategory} className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-purple-400/40"></div>
             <h3 className="font-semibold text-sm text-slate-200 flex items-center gap-1.5">
               <PlusCircle size={16} className="text-purple-400" /> Cadastrar Categoria
@@ -291,7 +291,7 @@ export default function SectorsAndCategoriesPage() {
           </form>
 
           {/* Create Custom Field Form */}
-          <form onSubmit={handleCreateCustomField} className="glass-panel p-6 rounded-2xl relative overflow-hidden space-y-4">
+          <form onSubmit={handleCreateCustomField} className="glass-panel p-4 sm:p-6 rounded-2xl relative overflow-hidden space-y-4">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-amber-400/40"></div>
             <h3 className="font-semibold text-sm text-slate-200 flex items-center gap-1.5">
               <PlusCircle size={16} className="text-amber-400" /> Cadastrar Campo Específico (Setor)
