@@ -61,6 +61,7 @@ export default function NewTicketPage() {
   });
 
   const watchedDeptId = watch('departmentId');
+  const watchedCategoryId = watch('categoryId');
 
   // Carrega os departamentos no início
   useEffect(() => {
@@ -76,32 +77,39 @@ export default function NewTicketPage() {
       });
   }, []);
 
-  // Monitora a troca de departamento para carregar categorias e campos dinâmicos
+  // Monitora a troca de departamento para atualizar categorias
   useEffect(() => {
     if (!watchedDeptId) {
       setSelectedDept(null);
+      setValue('categoryId', '');
       setCustomFields([]);
       return;
     }
 
     const dept = departments.find((d) => d.id === watchedDeptId) || null;
     setSelectedDept(dept);
-    
-    // Reseta categoria antiga selecionada
     setValue('categoryId', '');
+    setCustomFields([]);
+  }, [watchedDeptId, departments, setValue]);
 
-    // Carregar campos customizados
+  // Monitora a troca de categoria para carregar os campos específicos dessa categoria
+  useEffect(() => {
+    if (!watchedDeptId || !watchedCategoryId) {
+      setCustomFields([]);
+      return;
+    }
+
     setLoadingFields(true);
-    apiFetch(`/api/departments/${watchedDeptId}/fields`)
+    apiFetch(`/api/departments/${watchedDeptId}/fields?categoryId=${watchedCategoryId}`)
       .then((res) => res.json())
       .then((fields) => {
-        setCustomFields(fields);
+        setCustomFields(fields || []);
         setLoadingFields(false);
       })
       .catch(() => {
         setLoadingFields(false);
       });
-  }, [watchedDeptId, departments, setValue]);
+  }, [watchedDeptId, watchedCategoryId]);
 
   const onSubmit = async (data: FormValues) => {
     setSubmitting(true);
@@ -333,17 +341,17 @@ export default function NewTicketPage() {
         </div>
 
         {/* DYNAMIC CUSTOM FIELDS SECTION */}
-        {watchedDeptId && (
+        {watchedDeptId && watchedCategoryId && (
           <div className="border-t border-slate-900 pt-6 space-y-4">
             <div className="flex items-center gap-2 text-purple-400">
               <CheckCircle2 size={20} />
-              <h3 className="font-semibold text-sm">Informações Específicas do Departamento</h3>
+              <h3 className="font-semibold text-sm">Informações Específicas da Categoria</h3>
             </div>
 
             {loadingFields ? (
-              <div className="py-4 text-xs text-slate-500 animate-pulse">Carregando campos do setor...</div>
+              <div className="py-4 text-xs text-slate-500 animate-pulse">Carregando campos da categoria...</div>
             ) : customFields.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">Sem perguntas adicionais para este setor.</p>
+              <p className="text-xs text-slate-500 italic">Sem perguntas adicionais para esta categoria.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {customFields.map((field) => {

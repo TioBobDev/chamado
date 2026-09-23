@@ -167,10 +167,11 @@ model TicketCategory {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  department Department @relation(fields: [departmentId], references: [id])
-  company    Company    @relation(fields: [companyId], references: [id])
-  tickets    Ticket[]
-  slaRules   SlaRule[]
+  department   Department          @relation(fields: [departmentId], references: [id])
+  company      Company             @relation(fields: [companyId], references: [id])
+  tickets      Ticket[]
+  slaRules     SlaRule[]
+  customFields TicketCustomField[]
 
   @@index([departmentId])
   @@index([companyId])
@@ -299,6 +300,7 @@ model TicketCustomField {
   type         CustomFieldType @default(TEXT)
   options      String?         @db.Text // Comma-separated values for SELECT
   departmentId String          @map("department_id")
+  categoryId   String?         @map("category_id")
   companyId    String          @map("company_id")
   isRequired   Boolean         @default(false) @map("is_required")
   active       Boolean         @default(true)
@@ -306,10 +308,12 @@ model TicketCustomField {
   updatedAt    DateTime        @updatedAt @map("updated_at")
 
   department Department          @relation(fields: [departmentId], references: [id])
+  category   TicketCategory?     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   company    Company             @relation(fields: [companyId], references: [id])
   values     TicketCustomValue[]
 
   @@index([departmentId])
+  @@index([categoryId])
   @@index([companyId])
   @@map("ticket_custom_fields")
 }

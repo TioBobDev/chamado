@@ -2,6 +2,7 @@ import React from 'react';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { security } from '@/shared/security/security';
+import { prisma } from '@/shared/database/database';
 import DashboardShell, { SidebarLink } from '@/components/DashboardShell';
 import { 
   FileText, 
@@ -30,6 +31,20 @@ export default async function DashboardLayout({
   if (!session) {
     redirect('/login');
   }
+
+  // Consulta o usuário em tempo real no banco para garantir permissões de perfil imediatas
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    include: { role: true },
+  });
+
+  if (!user || !user.active) {
+    redirect('/login');
+  }
+
+  session.role = user.role.name;
+  session.name = user.name;
+  session.email = user.email;
 
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';

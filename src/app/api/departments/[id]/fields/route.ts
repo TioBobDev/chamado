@@ -5,5 +5,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> }
 ) {
   const { id } = await context.params;
-  return departmentController.getCustomFields(id);
+  const url = new URL(request.url);
+  const categoryId = url.searchParams.get('categoryId');
+  return departmentController.getCustomFields(id, categoryId);
 }

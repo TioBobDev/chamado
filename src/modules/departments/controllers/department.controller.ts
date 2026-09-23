@@ -17,6 +17,21 @@ export async function getCurrentUserSession() {
   if (!session) {
     throw new UnauthorizedError('Sessão expirada ou inválida.');
   }
+
+  // Consulta o usuário em tempo real no banco para garantir permissões imediatas
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    include: { role: true },
+  });
+
+  if (!user || !user.active) {
+    throw new UnauthorizedError('Usuário inativo ou não encontrado.');
+  }
+
+  session.role = user.role.name;
+  session.name = user.name;
+  session.email = user.email;
+  session.companyId = user.companyId;
   
   return session;
 }
@@ -45,10 +60,10 @@ export class DepartmentController {
     }
   }
 
-  async getCustomFields(departmentId: string) {
+  async getCustomFields(departmentId: string, categoryId?: string | null) {
     try {
       await getCurrentUserSession(); // Garante autenticação
-      const fields = await departmentService.getDepartmentCustomFields(departmentId);
+      const fields = await departmentService.getDepartmentCustomFields(departmentId, categoryId);
       return Response.json(fields);
     } catch (error) {
       return handleApiError(error);

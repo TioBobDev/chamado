@@ -19,7 +19,15 @@ interface DeptData {
   name: string;
   teams: { id: string; name: string }[];
   categories: { id: string; name: string }[];
-  customFields: { id: string; name: string; type: string; isRequired: boolean; options: string | null }[];
+  customFields: {
+    id: string;
+    name: string;
+    type: string;
+    isRequired: boolean;
+    options: string | null;
+    categoryId?: string | null;
+    category?: { id: string; name: string } | null;
+  }[];
 }
 
 export default function SectorsAndCategoriesPage() {
@@ -44,6 +52,7 @@ export default function SectorsAndCategoriesPage() {
   const [newFieldOptions, setNewFieldOptions] = useState('');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldDeptId, setNewFieldDeptId] = useState('');
+  const [newFieldCategoryId, setNewFieldCategoryId] = useState('');
 
   // Carregar dados de topologia
   const loadTopology = async () => {
@@ -141,6 +150,7 @@ export default function SectorsAndCategoriesPage() {
           type: newFieldType,
           options: newFieldType === 'SELECT' ? newFieldOptions : null,
           isRequired: newFieldRequired,
+          categoryId: newFieldCategoryId || null,
         }),
       });
       const data = await res.json();
@@ -153,6 +163,7 @@ export default function SectorsAndCategoriesPage() {
       setNewFieldOptions('');
       setNewFieldRequired(false);
       setNewFieldDeptId('');
+      setNewFieldCategoryId('');
       await loadTopology();
     } catch (err: any) {
       setErrorMsg(err.message);
@@ -340,12 +351,30 @@ export default function SectorsAndCategoriesPage() {
               <label className="block text-[10px] text-slate-400 uppercase font-semibold">Setor do Chamado</label>
               <select
                 value={newFieldDeptId}
-                onChange={(e) => setNewFieldDeptId(e.target.value)}
+                onChange={(e) => {
+                  setNewFieldDeptId(e.target.value);
+                  setNewFieldCategoryId('');
+                }}
                 className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-300 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs"
               >
-                <option value="">Selecione...</option>
+                <option value="">Selecione o setor...</option>
                 {departments.map((d) => (
                   <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[10px] text-slate-400 uppercase font-semibold">Categoria de Chamado</label>
+              <select
+                disabled={!newFieldDeptId}
+                value={newFieldCategoryId}
+                onChange={(e) => setNewFieldCategoryId(e.target.value)}
+                className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-300 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs disabled:opacity-40"
+              >
+                <option value="">Todas as Categorias do Setor</option>
+                {departments.find((d) => d.id === newFieldDeptId)?.categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
@@ -412,15 +441,24 @@ export default function SectorsAndCategoriesPage() {
                     ) : (
                       <div className="space-y-1.5">
                         {dept.customFields.map((cf) => (
-                          <div key={cf.id} className="flex justify-between items-center text-xs text-slate-400 bg-slate-950/20 px-2 py-1 rounded border border-slate-900/40 group hover:border-slate-800/40 transition-colors">
-                            <div className="flex items-center gap-1.5">
+                          <div key={cf.id} className="flex justify-between items-center text-xs text-slate-400 bg-slate-950/20 px-2 py-1.5 rounded border border-slate-900/40 group hover:border-slate-800/40 transition-colors">
+                            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                               <span className="font-medium text-slate-300">{cf.name}</span>
                               {cf.isRequired && (
                                 <span className="text-[8px] bg-red-500/10 text-red-400 border border-red-500/20 px-1 py-0.2 rounded font-bold uppercase">*</span>
                               )}
+                              {cf.category ? (
+                                <span className="text-[9px] bg-purple-500/15 text-purple-300 border border-purple-500/25 px-1.5 py-0.2 rounded font-medium">
+                                  {cf.category.name}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.2 rounded font-medium">
+                                  Geral
+                                </span>
+                              )}
                             </div>
                             
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 shrink-0">
                               {/* Display Type Badge */}
                               <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.2 rounded font-semibold uppercase">
                                 {cf.type}

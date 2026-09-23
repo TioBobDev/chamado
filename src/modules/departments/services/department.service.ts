@@ -14,12 +14,12 @@ export class DepartmentService {
     return department;
   }
 
-  async getDepartmentCustomFields(departmentId: string) {
+  async getDepartmentCustomFields(departmentId: string, categoryId?: string | null) {
     const department = await departmentRepository.findById(departmentId);
     if (!department) {
       throw new NotFoundError('Departamento não encontrado.');
     }
-    return departmentRepository.getCustomFieldsByDepartment(departmentId);
+    return departmentRepository.getCustomFieldsByDepartment(departmentId, categoryId);
   }
 }
 

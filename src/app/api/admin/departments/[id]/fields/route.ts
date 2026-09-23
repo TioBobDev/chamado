@@ -14,7 +14,7 @@ export async function POST(
     }
 
     const { id: departmentId } = await context.params;
-    const { name, type, options, isRequired } = await request.json();
+    const { name, type, options, isRequired, categoryId } = await request.json();
 
     if (!name || name.trim().length === 0) {
       throw new ValidationError('O nome do campo é obrigatório.');
@@ -32,8 +32,12 @@ export async function POST(
         options: type === CustomFieldType.SELECT ? options : null,
         isRequired: !!isRequired,
         departmentId,
+        categoryId: categoryId && categoryId.trim() !== '' ? categoryId : null,
         companyId: session.companyId,
         active: true,
+      },
+      include: {
+        category: { select: { id: true, name: true } },
       },
     });
 

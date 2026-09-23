@@ -14,6 +14,9 @@ export class DepartmentRepository {
         },
         customFields: {
           where: { active: true },
+          include: {
+            category: { select: { id: true, name: true } },
+          },
         },
       },
       orderBy: { name: 'asc' },
@@ -32,6 +35,9 @@ export class DepartmentRepository {
         },
         customFields: {
           where: { active: true },
+          include: {
+            category: { select: { id: true, name: true } },
+          },
         },
       },
     });
@@ -53,9 +59,24 @@ export class DepartmentRepository {
     return prisma.ticketCustomField.create({ data });
   }
 
-  async getCustomFieldsByDepartment(departmentId: string) {
+  async getCustomFieldsByDepartment(departmentId: string, categoryId?: string | null) {
+    const where: Prisma.TicketCustomFieldWhereInput = {
+      departmentId,
+      active: true,
+    };
+
+    if (categoryId) {
+      where.OR = [
+        { categoryId },
+        { categoryId: null },
+      ];
+    }
+
     return prisma.ticketCustomField.findMany({
-      where: { departmentId, active: true },
+      where,
+      include: {
+        category: { select: { id: true, name: true } },
+      },
       orderBy: { name: 'asc' },
     });
   }
