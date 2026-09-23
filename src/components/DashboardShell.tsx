@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, LogOut, Download } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import PwaInstallModal from '@/components/PwaInstallModal';
 import { withBasePath } from '@/shared/utils/api';
 
 export interface SidebarLink {
@@ -28,6 +29,8 @@ export default function DashboardShell({ session, links, children }: DashboardSh
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const pathname = usePathname();
 
   // Fecha o drawer mobile ao mudar de rota
@@ -47,15 +50,34 @@ export default function DashboardShell({ session, links, children }: DashboardSh
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
   }, []);
 
-  const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstallable(false);
-    }
-    setDeferredPrompt(null);
-  };
+  // Detecta se está em dispositivo móvel e exibe popup automático (se ainda não instalado e não dispensado)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true;
+
+    const mobile =
+      window.innerWidth < 768 ||
+      /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+
+    setIsMobileDevice(mobile);
+
+    // Se já estiver instalado como PWA ou não for celular, não exibe o modal automático
+    if (isStandalone || !mobile) return;
+
+    // Se o usuário já dispensou antes, não exibe automaticamente
+    const dismissed = localStorage.getItem('lumen_pwa_dismissed');
+    if (dismissed) return;
+
+    // Delay de 1.5s após entrar para exibição fluida
+    const timer = setTimeout(() => {
+      setIsModalOpen(true);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Renderiza conteúdo do menu lateral
   const renderSidebarContent = (isMobile = false) => (
@@ -126,10 +148,13 @@ export default function DashboardShell({ session, links, children }: DashboardSh
 
       {/* Footer Sidebar */}
       <div className="p-3 border-t border-slate-900/80 space-y-2">
-        {/* Botão de Instalação PWA (se disponível no navegador) */}
-        {isInstallable && (
+        {/* Botão de Instalação PWA (se disponível no navegador ou celular) */}
+        {(isInstallable || isMobileDevice) && (
           <button
-            onClick={handleInstallClick}
+            onClick={() => {
+              if (isMobile) setIsMobileOpen(false);
+              setIsModalOpen(true);
+            }}
             className="w-full flex items-center gap-3 px-3.5 py-2.5 bg-gradient-to-r from-sky-500/15 to-purple-500/15 border border-sky-500/20 text-sky-300 hover:text-sky-200 rounded-xl text-xs font-semibold transition-all cursor-pointer"
           >
             <Download size={18} />
@@ -201,6 +226,17 @@ export default function DashboardShell({ session, links, children }: DashboardSh
           {children}
         </main>
       </div>
+
+      {/* Modal Popup de Instalação PWA para Celular */}
+      <PwaInstallModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        deferredPrompt={deferredPrompt}
+        onInstallSuccess={() => {
+          setIsInstallable(false);
+          setIsModalOpen(false);
+        }}
+      />
     </div>
   );
 }
