@@ -7,7 +7,7 @@ import { loginSchema, LoginInput } from '@/modules/authentication/validators/aut
 import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { apiFetch } from '@/shared/utils/api';
+import { apiFetch, withBasePath } from '@/shared/utils/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -62,7 +62,7 @@ export default function LoginPage() {
         <div className="text-center mb-8 flex flex-col items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/logo_lumen.png?v=2"
+            src={withBasePath('/logo_lumen.png?v=2')}
             alt="Lumen Logo"
             className="h-36 object-contain"
           />
@@ -139,7 +139,7 @@ export default function LoginPage() {
         </form>
 
         <div className="mt-8 text-center text-xs text-slate-500 space-y-1">
-          <p>© 2026 @Dev.</p>
+          <p>© 2026 OTB Stúdio</p>
           <p className="text-[10px] text-slate-600">
             Ambiente Seguro e Monitorado para Auditoria
           </p>

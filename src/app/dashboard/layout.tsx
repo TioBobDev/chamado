@@ -109,7 +109,7 @@ export default async function DashboardLayout({
             <Link href="/dashboard" className="flex items-center justify-center w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
-                src="/logo_lumen_branco.png" 
+                src={withBasePath('/logo_lumen_branco.png')} 
                 alt="Lumen Logo" 
                 className="h-20 object-contain"
               />
