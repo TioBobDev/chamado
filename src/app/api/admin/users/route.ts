@@ -2,6 +2,7 @@ import { getCurrentUserSession } from '@/modules/departments/controllers/departm
 import { handleApiError, UnauthorizedError, ValidationError } from '@/shared/errors/errors';
 import { prisma } from '@/shared/database/database';
 import { security } from '@/shared/security/security';
+import { emailService } from '@/shared/email/email.service';
 
 export async function GET(request: Request) {
   try {
@@ -75,7 +76,8 @@ export async function POST(request: Request) {
     }
 
     // Criptografa a senha default "usuario123"
-    const passwordHash = await security.hashPassword('usuario123');
+    const defaultPassword = 'usuario123';
+    const passwordHash = await security.hashPassword(defaultPassword);
 
     const newUser = await prisma.user.create({
       data: {
@@ -95,6 +97,15 @@ export async function POST(request: Request) {
       include: {
         departments: true,
       },
+    });
+
+    // Dispara e-mail de boas-vindas com os dados de acesso (sem bloquear a resposta)
+    emailService.sendWelcomeEmail(
+      newUser.email,
+      newUser.name,
+      defaultPassword
+    ).catch((err) => {
+      console.error('[EMAIL] Falha ao enviar e-mail de boas-vindas:', err);
     });
 
     const { passwordHash: _, ...safeUser } = newUser;

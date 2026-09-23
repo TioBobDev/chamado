@@ -145,6 +145,75 @@ export class EmailService {
       resetUrl,
     };
   }
+
+  async sendWelcomeEmail(
+    email: string,
+    userName: string,
+    defaultPassword: string
+  ): Promise<{ success: boolean; simulated: boolean }> {
+    const baseUrl = process.env.APP_URL || 'http://localhost:3001';
+    const subject = 'Bem-vindo(a) ao ChamadoFlow! Seus dados de acesso';
+
+    const text = `Olá, ${userName}!\n\nSua conta foi criada com sucesso no ChamadoFlow.\n\nDados de acesso:\n- E-mail: ${email}\n- Senha: ${defaultPassword}\n\nNo seu primeiro acesso você será redirecionado para criar uma nova senha.\n\nAcesse agora: ${baseUrl}/login\n\nAtenciosamente,\nEquipe ChamadoFlow`;
+
+    const html = `
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Bem-vindo ao ChamadoFlow</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #e2e8f0; margin: 0; padding: 30px 15px; }
+        .card { max-width: 540px; margin: 0 auto; background: #131b2e; border: 1px solid #1e293b; border-radius: 16px; padding: 36px 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .logo { font-size: 22px; font-weight: 800; color: #38bdf8; letter-spacing: -0.5px; margin-bottom: 24px; display: inline-block; }
+        .logo span { color: #a855f7; }
+        h1 { font-size: 20px; font-weight: 700; color: #f8fafc; margin-top: 0; margin-bottom: 12px; }
+        p { font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0 0 16px; }
+        .credentials-box { background: #0b0f19; border: 1px solid #1e293b; border-radius: 12px; padding: 20px 24px; margin: 24px 0; }
+        .credentials-box .label { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .credentials-box .value { font-size: 15px; font-weight: 600; color: #f1f5f9; font-family: monospace; margin-bottom: 14px; }
+        .credentials-box .value:last-child { margin-bottom: 0; }
+        .btn-container { text-align: center; margin: 28px 0; }
+        .btn { display: inline-block; background: linear-gradient(135deg, #38bdf8, #818cf8); color: #0b0f19 !important; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3); }
+        .alert { background: rgba(251, 191, 36, 0.1); border-left: 3px solid #fbbf24; padding: 10px 14px; border-radius: 6px; font-size: 13px; color: #fde68a; margin-bottom: 20px; }
+        .footer { font-size: 12px; color: #64748b; text-align: center; margin-top: 24px; border-top: 1px solid #1e293b; padding-top: 18px; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="logo">Chamado<span>Flow</span></div>
+        <h1>🎉 Bem-vindo(a) ao ChamadoFlow!</h1>
+        <p>Olá, <strong>${userName}</strong>!</p>
+        <p>Sua conta foi criada com sucesso. Use os dados abaixo para acessar o sistema pela primeira vez:</p>
+
+        <div class="credentials-box">
+          <div class="label">E-mail de acesso</div>
+          <div class="value">${email}</div>
+          <div class="label">Senha temporária</div>
+          <div class="value">${defaultPassword}</div>
+        </div>
+
+        <div class="alert">
+          ⚠️ <strong>Importante:</strong> No seu primeiro acesso, você será solicitado a <strong>criar uma senha pessoal</strong>. A senha temporária acima será desativada após essa troca.
+        </div>
+
+        <div class="btn-container">
+          <a href="${baseUrl}/login" class="btn" target="_blank">Acessar o ChamadoFlow</a>
+        </div>
+
+        <p style="font-size: 12px; text-align: center;">Se você não reconhece este cadastro, entre em contato com o administrador do sistema.</p>
+
+        <div class="footer">
+          &copy; 2026 ChamadoFlow - Gestão Inteligente de Chamados
+        </div>
+      </div>
+    </body>
+    </html>
+    `;
+
+    return this.sendMail({ to: email, subject, text, html });
+  }
 }
 
 export const emailService = new EmailService();
