@@ -34,8 +34,9 @@ export const security = {
   /**
    * Assina um token JWT com as informações do usuário.
    */
-  signToken(payload: UserSessionPayload): string {
-    return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as any });
+  signToken(payload: UserSessionPayload, expiresIn?: string): string {
+    const expiration = expiresIn || JWT_EXPIRES_IN;
+    return jwt.sign(payload, JWT_SECRET, { expiresIn: expiration as any });
   },
 
   /**

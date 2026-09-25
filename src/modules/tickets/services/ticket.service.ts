@@ -372,6 +372,7 @@ export class TicketService {
             userId: input.attendantId,
             title: `Chamado #${ticket.number} transferido para você`,
             message: `O chamado #${ticket.number} foi transferido para seu atendimento por ${ticket.attendant?.name || 'um colega'}.`,
+            url: `/dashboard/tickets/${ticket.id}`,
             type: 'IN_APP',
           })
         );
@@ -503,6 +504,7 @@ export class TicketService {
           userId: ticket.requesterId,
           title: `Chamado #${ticket.number}: Aguardando sua resposta`,
           message: `${author?.name || 'O atendente'} solicitou informações para prosseguir com seu chamado: "${input.content.slice(0, 120)}${input.content.length > 120 ? '...' : ''}"`,
+          url: `/dashboard/tickets/${ticket.id}`,
           type: 'IN_APP',
         });
       }
@@ -554,6 +556,7 @@ export class TicketService {
               userId: ticket.attendantId,
               title: `Chamado #${ticket.number}: Solicitante respondeu`,
               message: `${ticket.requester.name} enviou uma resposta no chamado #${ticket.number}. O atendimento foi retomado automaticamente.`,
+              url: `/dashboard/tickets/${ticket.id}`,
               type: 'IN_APP',
             });
           }

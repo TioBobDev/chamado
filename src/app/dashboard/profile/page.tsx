@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { apiFetch, withBasePath } from '@/shared/utils/api';
 import { useRouter } from 'next/navigation';
+import PushNotificationManager from '@/components/PushNotificationManager';
 
 interface UserProfileData {
   id: string;
@@ -432,6 +433,9 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Push Notifications Card (Celular & PWA) */}
+      <PushNotificationManager />
 
       {/* TWO COLUMNS: DADOS CADASTRAIS & SEGURANÇA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

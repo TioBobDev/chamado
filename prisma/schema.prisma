@@ -86,6 +86,7 @@ model User {
   notifications    Notification[]
   auditLogs        AuditLog[]
   passwordResetTokens PasswordResetToken[]
+  pushSubscriptions PushSubscription[]
 
   @@index([companyId])
   @@index([roleId])
@@ -454,4 +455,20 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @db.VarChar(1000)
+  p256dh    String   @db.Text
+  auth      String   @db.VarChar(255)
+  userAgent String?  @map("user_agent") @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

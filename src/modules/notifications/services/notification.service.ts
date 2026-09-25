@@ -1,16 +1,19 @@
 import { prisma } from '@/shared/database/database';
 import { logger } from '@/shared/logger/logger';
+import { pushNotificationService } from './push-notification.service';
 
 export interface NotificationPayload {
   userId: string;
   title: string;
   message: string;
+  url?: string;
   type?: 'IN_APP' | 'EMAIL' | 'TEAMS' | 'SLACK';
 }
 
 export class NotificationService {
   /**
    * Envia uma notificação e salva no banco se for do tipo IN_APP.
+   * Também despacha Web Push notification para os aparelhos móveis cadastrados.
    */
   async notify(payload: NotificationPayload) {
     const type = payload.type || 'IN_APP';
@@ -25,6 +28,17 @@ export class NotificationService {
           type,
         },
       });
+
+      // Dispara push para celular/PWA em segundo plano
+      pushNotificationService
+        .sendPushToUser(payload.userId, {
+          title: payload.title,
+          message: payload.message,
+          url: payload.url || '/dashboard',
+        })
+        .catch((err) => {
+          logger.warn('[PUSH] Erro ao disparar push notification:', { error: String(err) });
+        });
     }
 
     // Estruturado para integrações futuras
@@ -71,11 +85,14 @@ export class NotificationService {
 
       if (!ticket) return;
 
+      const ticketUrl = `/dashboard/tickets/${ticket.id}`;
+
       // 1. Notifica o Solicitante (caso a alteração não seja dele)
       await this.notify({
         userId: ticket.requesterId,
         title: `Chamado #${ticket.number}: ${actionName}`,
         message: `Seu chamado sofreu alterações: ${detail}`,
+        url: ticketUrl,
         type: 'IN_APP',
       });
 
@@ -85,6 +102,7 @@ export class NotificationService {
           userId: ticket.attendantId,
           title: `Chamado #${ticket.number}: ${actionName}`,
           message: `O chamado que você atende foi modificado: ${detail}`,
+          url: ticketUrl,
           type: 'IN_APP',
         });
       }

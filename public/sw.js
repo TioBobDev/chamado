@@ -33,3 +33,67 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// ==========================================
+// Web Push Notifications & Background Sync
+// ==========================================
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = {
+        title: 'Lumen Chamados',
+        message: event.data.text(),
+      };
+    }
+  }
+
+  const title = data.title || 'Lumen Chamados';
+  const basePath = '/chamado';
+  let targetUrl = data.url || '/dashboard';
+  if (!targetUrl.startsWith('http') && !targetUrl.startsWith(basePath)) {
+    targetUrl = basePath + (targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl);
+  }
+
+  const options = {
+    body: data.message || 'Você recebeu uma nova atualização no chamado.',
+    icon: basePath + '/icons/icon-192x192.png',
+    badge: basePath + '/icons/icon-192x192.png',
+    vibrate: [200, 100, 200, 100, 200],
+    tag: data.tag || ('lumen-' + Date.now()),
+    renotify: true,
+    data: {
+      url: targetUrl,
+    },
+    actions: [
+      { action: 'open', title: 'Abrir Chamado' }
+    ]
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = event.notification.data?.url || '/chamado/dashboard';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes('/chamado') && 'focus' in client) {
+          if ('navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+

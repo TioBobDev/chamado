@@ -49,7 +49,11 @@ export async function POST(request: Request) {
       changePasswordRequired: false, // Desmarcada
     };
 
-    const token = security.signToken(newPayload);
+    const userAgent = request.headers.get('user-agent') || '';
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent);
+    const maxAge = isMobile ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
+
+    const token = security.signToken(newPayload, isMobile ? '30d' : undefined);
     const cookieName = process.env.COOKIE_NAME || 'chamado_session';
     const cookieStore = await cookies();
     
@@ -57,7 +61,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 horas
+      maxAge,
       path: '/',
     });
 

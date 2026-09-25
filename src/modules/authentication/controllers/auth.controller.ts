@@ -21,8 +21,18 @@ export class AuthController {
         throw new ValidationError('Erro de validação de dados de login', errors);
       }
 
+      // Detecta se a requisição provém de um dispositivo móvel ou PWA
+      const userAgent = req.headers.get('user-agent') || '';
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(userAgent) 
+        || (body && (body.isMobile === true || body.isPwa === true));
+
       const { email, password } = validation.data;
-      const { token, user } = await authService.authenticate(email, password);
+      const { token, user } = await authService.authenticate(email, password, isMobile);
+
+      // Define a duração da sessão: 30 dias para celulares/PWA, 8 horas para desktop
+      const maxAge = isMobile 
+        ? 60 * 60 * 24 * 30 // 30 dias
+        : 60 * 60 * 8;      // 8 horas
 
       // Define o cookie de sessão HTTP-Only seguro
       const cookieName = process.env.COOKIE_NAME || 'chamado_session';
@@ -31,7 +41,7 @@ export class AuthController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: 60 * 60 * 8, // 8 horas
+        maxAge,
         path: '/',
       });
 

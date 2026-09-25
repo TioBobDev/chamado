@@ -6,7 +6,11 @@ import { emailService } from '@/shared/email/email.service';
 import crypto from 'crypto';
 
 export class AuthService {
-  async authenticate(email: string, password: string): Promise<{ token: string; user: UserSessionPayload }> {
+  async authenticate(
+    email: string, 
+    password: string, 
+    isMobile: boolean = false
+  ): Promise<{ token: string; user: UserSessionPayload }> {
     const user = await userRepository.findByEmail(email);
 
     if (!user) {
@@ -35,7 +39,8 @@ export class AuthService {
       changePasswordRequired: user.changePasswordRequired,
     };
 
-    const token = security.signToken(payload);
+    // Para celulares/PWA o token dura 30 dias; no desktop dura as 8 horas normais de expediente
+    const token = security.signToken(payload, isMobile ? '30d' : undefined);
 
     return {
       token,
