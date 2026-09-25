@@ -79,6 +79,50 @@ async function apply() {
     console.log('Info push_subscriptions:', err.message);
   }
 
+  // 4. Coluna sla_paused_at na tabela tickets
+  try {
+    console.log('4. Verificando sla_paused_at em tickets...');
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE tickets 
+      ADD COLUMN sla_paused_at DATETIME(3) NULL;
+    `);
+    console.log('✓ Coluna sla_paused_at adicionada com sucesso em tickets!');
+  } catch (err) {
+    if (err.message && (err.message.includes('Duplicate column') || err.message.includes('already exists'))) {
+      console.log('✓ A coluna sla_paused_at já existe em tickets.');
+    } else {
+      console.log('Info sla_paused_at:', err.message);
+    }
+  }
+
+  // 5. Status canônico "Aguardando resposta do solicitante"
+  try {
+    console.log('5. Verificando status "Aguardando resposta do solicitante"...');
+    const company = await prisma.company.findFirst();
+    if (company) {
+      await prisma.ticketStatus.upsert({
+        where: { id: 'status-aguardando-solicitante' },
+        update: {
+          name: 'Aguardando resposta do solicitante',
+          color: '#8b5cf6',
+          active: true,
+        },
+        create: {
+          id: 'status-aguardando-solicitante',
+          name: 'Aguardando resposta do solicitante',
+          color: '#8b5cf6',
+          isInitial: false,
+          isFinal: false,
+          active: true,
+          companyId: company.id,
+        },
+      });
+      console.log('✓ Status "Aguardando resposta do solicitante" configurado com sucesso!');
+    }
+  } catch (err) {
+    console.log('Info status:', err.message);
+  }
+
   console.log('=== MIGRAÇÕES CONCLUÍDAS COM SUCESSO! ===\n');
 }
 
