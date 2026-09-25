@@ -11,7 +11,8 @@ import {
   ShieldAlert, 
   Briefcase,
   Users,
-  Clock
+  Clock,
+  User
 } from 'lucide-react';
 
 export default async function DashboardLayout({
@@ -46,6 +47,7 @@ export default async function DashboardLayout({
   session.role = user.role.name;
   session.name = user.name;
   session.email = user.email;
+  session.avatarUrl = user.avatarUrl;
 
   const headersList = await headers();
   const pathname = headersList.get('x-pathname') || '';
@@ -94,6 +96,12 @@ export default async function DashboardLayout({
       label: 'Logs de Auditoria',
       icon: <ShieldAlert size={20} />,
       rolesAllowed: ['Auditor', 'Administrador'],
+    },
+    {
+      href: '/dashboard/profile',
+      label: 'Meu Perfil',
+      icon: <User size={20} />,
+      rolesAllowed: ['Solicitante', 'Atendente', 'Coordenador', 'Gestor', 'Administrador', 'Auditor'],
     },
   ];
 

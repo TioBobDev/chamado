@@ -20,6 +20,7 @@ interface DashboardShellProps {
     name: string;
     role: string;
     email?: string;
+    avatarUrl?: string | null;
   };
   links: SidebarLink[];
   children: React.ReactNode;
@@ -32,6 +33,71 @@ export default function DashboardShell({ session, links, children }: DashboardSh
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const pathname = usePathname();
+
+  // Estado dinâmico do usuário para refletir avatar e dados instantaneamente
+  const [currentUser, setCurrentUser] = useState({
+    name: session.name,
+    role: session.role,
+    email: session.email,
+    avatarUrl: session.avatarUrl,
+  });
+
+  // Mantém sincronizado caso a prop session mude (ex: Server Action ou router.refresh)
+  useEffect(() => {
+    setCurrentUser({
+      name: session.name,
+      role: session.role,
+      email: session.email,
+      avatarUrl: session.avatarUrl,
+    });
+  }, [session.name, session.role, session.email, session.avatarUrl]);
+
+  // Consulta inicial e escuta de eventos em tempo de execução
+  useEffect(() => {
+    // Sincroniza avatar com o endpoint de perfil para garantir exibição imediata
+    fetch(withBasePath('/api/users/profile'))
+      .then((res) => {
+        if (res.ok) return res.json();
+        return null;
+      })
+      .then((data) => {
+        if (data && data.avatarUrl !== undefined) {
+          setCurrentUser((prev) => ({
+            ...prev,
+            name: data.name || prev.name,
+            avatarUrl: data.avatarUrl,
+          }));
+        }
+      })
+      .catch(() => {});
+
+    // Escuta evento customizado de atualização de foto/avatar
+    const handleAvatarUpdate = (e: any) => {
+      if (e.detail && e.detail.avatarUrl !== undefined) {
+        setCurrentUser((prev) => ({ ...prev, avatarUrl: e.detail.avatarUrl }));
+      }
+    };
+
+    // Escuta evento customizado de atualização de dados cadastrais
+    const handleProfileUpdate = (e: any) => {
+      if (e.detail) {
+        setCurrentUser((prev) => ({
+          ...prev,
+          ...(e.detail.name ? { name: e.detail.name } : {}),
+          ...(e.detail.email ? { email: e.detail.email } : {}),
+          ...(e.detail.avatarUrl !== undefined ? { avatarUrl: e.detail.avatarUrl } : {}),
+        }));
+      }
+    };
+
+    window.addEventListener('user-avatar-updated', handleAvatarUpdate);
+    window.addEventListener('user-profile-updated', handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener('user-avatar-updated', handleAvatarUpdate);
+      window.removeEventListener('user-profile-updated', handleProfileUpdate);
+    };
+  }, []);
 
   // Fecha o drawer mobile ao mudar de rota
   useEffect(() => {
@@ -109,17 +175,31 @@ export default function DashboardShell({ session, links, children }: DashboardSh
         </div>
 
         {/* User Profile Card */}
-        <div className="p-3 mx-3 my-3 rounded-xl bg-slate-900/60 border border-slate-800/50 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-purple-500 flex items-center justify-center font-bold text-slate-900 text-sm shrink-0 shadow-md">
-            {session.name.substring(0, 2).toUpperCase()}
-          </div>
+        <Link 
+          href="/dashboard/profile"
+          onClick={() => isMobile && setIsMobileOpen(false)}
+          className="p-3 mx-3 my-3 rounded-xl bg-slate-900/60 hover:bg-slate-900 border border-slate-800/50 hover:border-slate-700/80 flex items-center gap-3 transition-all group"
+          title="Ver meu perfil e configurações"
+        >
+          {currentUser.avatarUrl ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img 
+              src={withBasePath(currentUser.avatarUrl)} 
+              alt={currentUser.name} 
+              className="w-10 h-10 rounded-full object-cover shrink-0 shadow-md border border-slate-700/60 group-hover:border-sky-400 transition-colors"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 to-purple-500 flex items-center justify-center font-bold text-slate-900 text-sm shrink-0 shadow-md group-hover:scale-105 transition-transform">
+              {currentUser.name.substring(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="overflow-hidden min-w-0">
-            <h4 className="font-medium text-sm text-slate-200 truncate">{session.name}</h4>
+            <h4 className="font-medium text-sm text-slate-200 truncate group-hover:text-white transition-colors">{currentUser.name}</h4>
             <span className="inline-block bg-sky-500/10 text-sky-400 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-sky-500/20 mt-0.5">
-              {session.role}
+              {currentUser.role}
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Navigation Menu */}
         <nav className="px-3 space-y-1.5 mt-2">
@@ -216,8 +296,26 @@ export default function DashboardShell({ session, links, children }: DashboardSh
           </div>
 
           {/* Notificações e Ações */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
             <NotificationBell />
+            <Link
+              href="/dashboard/profile"
+              className="flex items-center gap-2 p-1 hover:bg-slate-900/80 rounded-xl transition-all border border-transparent hover:border-slate-800"
+              title="Meu Perfil"
+            >
+              {currentUser.avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img 
+                  src={withBasePath(currentUser.avatarUrl)} 
+                  alt={currentUser.name} 
+                  className="w-8 h-8 rounded-full object-cover border border-slate-700/80"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-purple-500 flex items-center justify-center font-bold text-slate-900 text-xs shadow-sm">
+                  {currentUser.name.substring(0, 2).toUpperCase()}
+                </div>
+              )}
+            </Link>
           </div>
         </header>
 

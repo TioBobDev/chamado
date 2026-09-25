@@ -32,6 +32,7 @@ interface UserPayload {
   id: string;
   name: string;
   email: string;
+  avatarUrl?: string | null;
   role?: { name: string };
 }
 
@@ -860,8 +861,17 @@ export default function TicketDetailPage() {
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-300">
-                          {comment.user.name.substring(0, 2).toUpperCase()}
+                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-300 overflow-hidden shrink-0 border border-slate-700/60">
+                          {comment.user.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img 
+                              src={withBasePath(comment.user.avatarUrl)} 
+                              alt={comment.user.name} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            comment.user.name.substring(0, 2).toUpperCase()
+                          )}
                         </div>
                         <span className="text-xs font-semibold text-slate-300">{comment.user.name}</span>
                         {comment.isInternal && (
@@ -1165,9 +1175,23 @@ export default function TicketDetailPage() {
 
             {/* Information Meta */}
             <div className="border-t border-slate-900 pt-4 text-xs space-y-2 text-slate-400 font-light">
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center">
                 <span>Solicitante:</span>
-                <span className="font-semibold text-slate-300">{ticket.requester.name}</span>
+                <div className="flex items-center gap-1.5 font-semibold text-slate-300">
+                  <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[9px] font-bold text-slate-300 overflow-hidden shrink-0 border border-slate-700/60">
+                    {ticket.requester.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={withBasePath(ticket.requester.avatarUrl)} 
+                        alt={ticket.requester.name} 
+                        className="w-full h-full object-cover" 
+                      />
+                    ) : (
+                      ticket.requester.name.substring(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <span>{ticket.requester.name}</span>
+                </div>
               </div>
               <div className="flex justify-between">
                 <span>Setor / Categoria:</span>

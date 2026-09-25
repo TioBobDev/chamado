@@ -68,6 +68,7 @@ model User {
   passwordHash String   @map("password_hash")
   roleId       String   @map("role_id")
   companyId    String   @map("company_id")
+  avatarUrl    String?  @map("avatar_url")
   active                 Boolean  @default(true)
   changePasswordRequired Boolean  @default(true) @map("change_password_required")
   createdAt              DateTime @default(now()) @map("created_at")

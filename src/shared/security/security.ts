@@ -11,6 +11,7 @@ export interface UserSessionPayload {
   role: string;
   permissions: string[];
   companyId: string;
+  avatarUrl?: string | null;
   changePasswordRequired?: boolean;
 }
 

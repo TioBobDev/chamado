@@ -10,7 +10,7 @@ export interface UploadResult {
 }
 
 export interface StorageService {
-  upload(fileBuffer: Buffer, originalName: string, mimeType: string): Promise<UploadResult>;
+  upload(fileBuffer: Buffer, originalName: string, mimeType: string, folder?: string): Promise<UploadResult>;
   delete(filePath: string): Promise<void>;
   getLocalPath(filePath: string): string;
 }
@@ -34,7 +34,7 @@ export class LocalStorageService implements StorageService {
     }
   }
 
-  async upload(fileBuffer: Buffer, originalName: string, mimeType: string): Promise<UploadResult> {
+  async upload(fileBuffer: Buffer, originalName: string, mimeType: string, folder: string = 'tickets'): Promise<UploadResult> {
     // 1. Validar tamanho do buffer
     if (fileBuffer.length > MAX_FILE_SIZE) {
       throw new Error('O arquivo excede o limite máximo permitido de 10MB.');
@@ -46,12 +46,15 @@ export class LocalStorageService implements StorageService {
       throw new Error(`Arquivos com extensão ${ext} não são permitidos por motivos de segurança.`);
     }
 
-    // 3. Gerar pasta baseada no ano/mês para organização
+    // 3. Gerar pasta baseada no tipo ou ano/mês para organização
     const now = new Date();
     const year = now.getFullYear().toString();
     const month = (now.getMonth() + 1).toString().padStart(2, '0');
     
-    const targetDir = path.join(this.baseDir, 'tickets', year, month);
+    const targetDir = folder === 'avatars'
+      ? path.join(this.baseDir, 'avatars')
+      : path.join(this.baseDir, folder, year, month);
+
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
     }

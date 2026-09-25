@@ -25,15 +25,15 @@ export class TicketRepository {
     return prisma.ticket.findUnique({
       where: { id },
       include: {
-        requester: { select: { id: true, name: true, email: true, role: { select: { name: true } } } },
-        attendant: { select: { id: true, name: true, email: true } },
+        requester: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+        attendant: { select: { id: true, name: true, email: true, avatarUrl: true } },
         department: true,
         category: true,
         status: true,
         team: true,
         comments: {
           include: {
-            user: { select: { id: true, name: true, email: true, role: { select: { name: true } } } },
+            user: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
           },
           orderBy: { createdAt: 'asc' },
         },
