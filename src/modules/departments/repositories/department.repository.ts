@@ -11,6 +11,19 @@ export class DepartmentRepository {
         },
         categories: {
           where: { active: true },
+          include: {
+            slaRules: {
+              where: { active: true },
+              select: {
+                id: true,
+                name: true,
+                priority: true,
+                responseTimeMinutes: true,
+                resolutionTimeMinutes: true,
+                active: true,
+              },
+            },
+          },
         },
         customFields: {
           where: { active: true },
@@ -32,6 +45,19 @@ export class DepartmentRepository {
         },
         categories: {
           where: { active: true },
+          include: {
+            slaRules: {
+              where: { active: true },
+              select: {
+                id: true,
+                name: true,
+                priority: true,
+                responseTimeMinutes: true,
+                resolutionTimeMinutes: true,
+                active: true,
+              },
+            },
+          },
         },
         customFields: {
           where: { active: true },

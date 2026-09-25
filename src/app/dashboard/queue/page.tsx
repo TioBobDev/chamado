@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Filter, AlertTriangle, CheckCircle, Clock, Layers, UserCheck } from 'lucide-react';
+import { Search, Filter, AlertTriangle, AlertCircle, CheckCircle, CheckCircle2, Clock, Layers, UserCheck, PauseCircle } from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
 import { apiFetch } from '@/shared/utils/api';
 
@@ -14,10 +14,11 @@ interface Ticket {
   attendant: { id: string; name: string } | null;
   department: { name: string };
   category: { name: string };
-  status: { id: string; name: string; color: string };
+  status: { id: string; name: string; color: string; isFinal?: boolean };
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   slaDeadline: string | null;
   slaViolated: boolean;
+  slaPausedAt?: string | null;
   createdAt: string;
 }
 
@@ -120,6 +121,82 @@ export default function TicketQueuePage() {
       default:
         return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-xs px-2 py-0.5 rounded-full font-medium">Baixa</span>;
     }
+  };
+
+  const getSlaBadge = (ticket: Ticket) => {
+    if (!ticket.slaDeadline) {
+      return <span className="text-slate-600">-</span>;
+    }
+
+    const now = Date.now();
+    const deadline = new Date(ticket.slaDeadline).getTime();
+    const isClosed = ticket.status.name === 'Encerrado' || ticket.status.isFinal;
+    const isPaused = ticket.status.name === 'Aguardando resposta do solicitante' || ticket.status.id === 'status-aguardando-solicitante' || !!ticket.slaPausedAt;
+    const isViolated = !isPaused && (ticket.slaViolated || (now > deadline && !isClosed));
+    const diffMs = deadline - now;
+
+    if (isClosed) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-medium">
+          <CheckCircle2 size={11} /> Resolvido
+        </span>
+      );
+    }
+
+    if (isPaused) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 font-medium">
+          <PauseCircle size={11} /> SLA Pausado
+        </span>
+      );
+    }
+
+    if (isViolated) {
+      const lateMins = Math.floor(Math.abs(diffMs) / 60000);
+      const lateHours = Math.floor(lateMins / 60);
+      const lateText = lateHours > 0 ? `${lateHours}h ${lateMins % 60}m` : `${lateMins}m`;
+
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20 w-fit">
+            <AlertCircle size={11} /> Estourado
+          </span>
+          <span className="text-[10px] text-red-400/80 font-mono">
+            Atrasado há {lateText}
+          </span>
+        </div>
+      );
+    }
+
+    // Tempo restante
+    const remMins = Math.floor(diffMs / 60000);
+    const remHours = Math.floor(remMins / 60);
+    const remDays = Math.floor(remHours / 24);
+    const isUrgentNotice = remHours < 2; // menos de 2 horas restantes
+
+    let remText = '';
+    if (remDays > 0) {
+      remText = `${remDays}d ${remHours % 24}h restantes`;
+    } else if (remHours > 0) {
+      remText = `${remHours}h ${remMins % 60}m restantes`;
+    } else {
+      remText = `${remMins} min restantes`;
+    }
+
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md border w-fit font-medium ${
+          isUrgentNotice 
+            ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' 
+            : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+        }`}>
+          <Clock size={11} /> {isUrgentNotice ? 'Atenção' : 'No Prazo'}
+        </span>
+        <span className="text-[10px] text-slate-400 font-mono">
+          {remText}
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -305,19 +382,7 @@ export default function TicketQueuePage() {
                       {getPriorityBadge(t.priority)}
                     </td>
                     <td className="py-4 px-6">
-                      {t.slaDeadline ? (
-                        t.slaViolated ? (
-                          <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold bg-red-500/5 px-2 py-0.5 rounded-md border border-red-500/10">
-                            Estourado
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-emerald-400 text-xs bg-emerald-500/5 px-2 py-0.5 rounded-md border border-emerald-500/10">
-                            Ok • {new Date(t.slaDeadline).toLocaleDateString('pt-BR')}
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-slate-600">-</span>
-                      )}
+                      {getSlaBadge(t)}
                     </td>
                     <td className="py-4 px-6 text-right">
                       {currentUser && t.requester.id === currentUser.id ? (

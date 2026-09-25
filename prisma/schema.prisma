@@ -208,6 +208,7 @@ model Ticket {
   statusId     String    @map("status_id")
   slaDeadline  DateTime? @map("sla_deadline")
   slaViolated  Boolean   @default(false) @map("sla_violated")
+  slaPausedAt  DateTime? @map("sla_paused_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   closedAt     DateTime? @map("closed_at")

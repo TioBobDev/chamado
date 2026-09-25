@@ -3,14 +3,40 @@
 import React, { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, Save, FilePlus2, CheckCircle2, Paperclip, X, PlusCircle } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Loader2, 
+  Save, 
+  FilePlus2, 
+  CheckCircle2, 
+  Paperclip, 
+  X, 
+  PlusCircle, 
+  Clock,
+  Lock
+} from 'lucide-react';
 import Link from 'next/link';
 import { apiFetch } from '@/shared/utils/api';
+
+interface CategorySlaRule {
+  id: string;
+  name: string;
+  priority: string;
+  responseTimeMinutes: number;
+  resolutionTimeMinutes: number;
+  active: boolean;
+}
+
+interface Category {
+  id: string;
+  name: string;
+  slaRules?: CategorySlaRule[];
+}
 
 interface Department {
   id: string;
   name: string;
-  categories: { id: string; name: string }[];
+  categories: Category[];
 }
 
 interface CustomField {
@@ -32,11 +58,26 @@ interface FormValues {
   customFields: Record<string, string>;
 }
 
+function formatDuration(minutes: number): string {
+  if (minutes <= 0) return '0 min';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remMinutes = minutes % 60;
+  if (hours < 24) {
+    return remMinutes > 0 ? `${hours}h ${remMinutes}min` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (remHours === 0 && remMinutes === 0) return `${days} ${days === 1 ? 'dia' : 'dias'}`;
+  return `${days}d ${remHours > 0 ? remHours + 'h' : ''}`;
+}
+
 export default function NewTicketPage() {
   const router = useRouter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [activeCategorySla, setActiveCategorySla] = useState<CategorySlaRule | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +103,7 @@ export default function NewTicketPage() {
 
   const watchedDeptId = watch('departmentId');
   const watchedCategoryId = watch('categoryId');
+  const watchedPriority = watch('priority') || 'MEDIUM';
 
   // Carrega os departamentos no início
   useEffect(() => {
@@ -82,6 +124,7 @@ export default function NewTicketPage() {
     if (!watchedDeptId) {
       setSelectedDept(null);
       setValue('categoryId', '');
+      setActiveCategorySla(null);
       setCustomFields([]);
       return;
     }
@@ -89,8 +132,40 @@ export default function NewTicketPage() {
     const dept = departments.find((d) => d.id === watchedDeptId) || null;
     setSelectedDept(dept);
     setValue('categoryId', '');
+    setActiveCategorySla(null);
     setCustomFields([]);
   }, [watchedDeptId, departments, setValue]);
+
+  // Monitora a troca de categoria para detectar SLA específico da atividade
+  useEffect(() => {
+    if (!watchedCategoryId || !selectedDept) {
+      setActiveCategorySla(null);
+      return;
+    }
+
+    const cat = selectedDept.categories.find((c) => c.id === watchedCategoryId);
+    const activeRule = cat?.slaRules?.find((r) => r.active);
+
+    if (activeRule) {
+      setActiveCategorySla(activeRule);
+      setValue('priority', activeRule.priority);
+      if (activeRule.priority === 'URGENT') {
+        setValue('impact', 'HIGH');
+        setValue('urgency', 'HIGH');
+      } else if (activeRule.priority === 'HIGH') {
+        setValue('impact', 'HIGH');
+        setValue('urgency', 'MEDIUM');
+      } else if (activeRule.priority === 'LOW') {
+        setValue('impact', 'LOW');
+        setValue('urgency', 'LOW');
+      } else {
+        setValue('impact', 'MEDIUM');
+        setValue('urgency', 'MEDIUM');
+      }
+    } else {
+      setActiveCategorySla(null);
+    }
+  }, [watchedCategoryId, selectedDept, setValue]);
 
   // Monitora a troca de categoria para carregar os campos específicos dessa categoria
   useEffect(() => {
@@ -128,7 +203,7 @@ export default function NewTicketPage() {
       description: data.description,
       departmentId: data.departmentId,
       categoryId: data.categoryId,
-      priority: data.priority,
+      priority: activeCategorySla ? activeCategorySla.priority : data.priority,
       impact: data.impact,
       urgency: data.urgency,
       customFields: customFieldsArray,
@@ -269,16 +344,35 @@ export default function NewTicketPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-slate-900 pt-6">
           {/* Priority */}
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Prioridade</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                Prioridade
+              </label>
+              {activeCategorySla && (
+                <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                  <Lock size={10} /> Predefinida
+                </span>
+              )}
+            </div>
             <select
               {...register('priority')}
-              className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-200 py-2.5 px-4 focus:outline-none focus:border-sky-400 text-sm"
+              disabled={!!activeCategorySla}
+              className={`w-full bg-slate-950/40 border rounded-xl text-slate-200 py-2.5 px-4 focus:outline-none text-sm transition-all ${
+                activeCategorySla 
+                  ? 'opacity-80 border-amber-500/40 cursor-not-allowed bg-amber-500/5' 
+                  : 'border-slate-800 focus:border-sky-400'
+              }`}
             >
               <option value="LOW">Baixa</option>
               <option value="MEDIUM">Média</option>
               <option value="HIGH">Alta</option>
               <option value="URGENT">Urgente</option>
             </select>
+            {activeCategorySla && (
+              <p className="text-[11px] text-amber-300/80 leading-snug">
+                Criticidade vinculada automaticamente à atividade selecionada.
+              </p>
+            )}
           </div>
 
           {/* Impact */}
@@ -306,6 +400,50 @@ export default function NewTicketPage() {
               <option value="HIGH">Alta</option>
             </select>
           </div>
+        </div>
+
+        {/* Informativo de SLA ITIL / Atividade */}
+        <div className={`p-4 rounded-xl border flex items-center justify-between gap-4 text-xs transition-all ${
+          activeCategorySla
+            ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
+            : watchedPriority === 'URGENT' 
+            ? 'bg-red-500/10 border-red-500/30 text-red-300' 
+            : watchedPriority === 'HIGH' 
+            ? 'bg-orange-500/10 border-orange-500/30 text-orange-300' 
+            : watchedPriority === 'MEDIUM' 
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' 
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+        }`}>
+          <div className="flex items-center gap-3">
+            <Clock size={18} className="shrink-0 text-sky-400" />
+            <div>
+              <span className="font-bold block text-slate-200">
+                {activeCategorySla 
+                  ? `SLA Específico da Atividade (${activeCategorySla.name}):` 
+                  : 'Acordo de Nível de Serviço (SLA ITIL):'}
+              </span>
+              <span className="text-[11px] opacity-90">
+                {activeCategorySla ? (
+                  <>
+                    🎯 1ª Resposta prevista em até <strong>{formatDuration(activeCategorySla.responseTimeMinutes)}</strong> • 
+                    Resolução final prevista em até <strong>{formatDuration(activeCategorySla.resolutionTimeMinutes)}</strong>.
+                  </>
+                ) : (
+                  <>
+                    {watchedPriority === 'URGENT' && '🔴 Crítico: 1ª resposta em até 30 min • Resolução prevista em até 4 horas.'}
+                    {watchedPriority === 'HIGH' && '🟠 Alta: 1ª resposta em até 1 hora • Resolução prevista em até 8 horas (1 dia útil).'}
+                    {watchedPriority === 'MEDIUM' && '🟡 Média: 1ª resposta em até 2 horas • Resolução prevista em até 24 horas.'}
+                    {watchedPriority === 'LOW' && '🔵 Baixa: 1ª resposta em até 8 horas • Resolução prevista em até 72 horas (3 dias úteis).'}
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+          <span className="hidden sm:inline-block font-semibold px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-black/20 border border-current">
+            {activeCategorySla 
+              ? `Atividade (${formatDuration(activeCategorySla.resolutionTimeMinutes)})` 
+              : watchedPriority === 'URGENT' ? 'Crítico (4h)' : watchedPriority === 'HIGH' ? 'Alta (8h)' : watchedPriority === 'MEDIUM' ? 'Padrão (24h)' : 'Rotina (72h)'}
+          </span>
         </div>
 
         {/* Title */}

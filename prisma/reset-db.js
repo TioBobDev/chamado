@@ -122,6 +122,7 @@ async function main() {
   const statuses = [
     { id: 'status-aberto', name: 'Aberto', color: '#3b82f6', isInitial: true, isFinal: false },
     { id: 'status-atendimento', name: 'Em Atendimento', color: '#f59e0b', isInitial: false, isFinal: false },
+    { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante', color: '#8b5cf6', isInitial: false, isFinal: false },
     { id: 'status-encerrado', name: 'Encerrado', color: '#10b981', isInitial: false, isFinal: true },
   ];
 
@@ -139,7 +140,21 @@ async function main() {
       },
     });
   }
-  console.log('✓ Status de chamados configurados.');
+  // 6.1 Regras de SLA Padrão ITIL
+  const itilRules = [
+    { id: 'sla-itil-urgent', name: 'SLA Crítico / Urgente (ITIL)', priority: 'URGENT', responseTimeMinutes: 30, resolutionTimeMinutes: 240, companyId: company.id },
+    { id: 'sla-itil-high', name: 'SLA Alta Prioridade (ITIL)', priority: 'HIGH', responseTimeMinutes: 60, resolutionTimeMinutes: 480, companyId: company.id },
+    { id: 'sla-itil-medium', name: 'SLA Média Prioridade (ITIL)', priority: 'MEDIUM', responseTimeMinutes: 120, resolutionTimeMinutes: 1440, companyId: company.id },
+    { id: 'sla-itil-low', name: 'SLA Baixa Prioridade (ITIL)', priority: 'LOW', responseTimeMinutes: 480, resolutionTimeMinutes: 4320, companyId: company.id },
+  ];
+  for (const rule of itilRules) {
+    await prisma.slaRule.upsert({
+      where: { id: rule.id },
+      update: rule,
+      create: rule,
+    });
+  }
+  console.log('✓ Regras de SLA padrão ITIL configuradas.');
 
   // 7. Criar Setores e Categorias Base
   const deptTI = await prisma.department.create({

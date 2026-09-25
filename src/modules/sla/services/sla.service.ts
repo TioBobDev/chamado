@@ -9,12 +9,16 @@ export class SlaService {
   async checkSlaBreaches(): Promise<number> {
     const now = new Date();
 
-    // Encontrar todos os chamados que possuem SLA, não estão finalizados e passaram do prazo
+    // Encontrar todos os chamados que possuem SLA, não estão finalizados, não estão pausados e passaram do prazo
     const breachedTickets = await prisma.ticket.findMany({
       where: {
         slaDeadline: { lt: now },
         closedAt: null,
         slaViolated: false,
+        slaPausedAt: null,
+        status: {
+          name: { not: 'Aguardando resposta do solicitante' },
+        },
       },
       include: {
         status: true,

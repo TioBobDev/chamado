@@ -23,6 +23,7 @@ export const createTicketSchema = z.object({
 export const addCommentSchema = z.object({
   content: z.string().min(1, 'O comentário não pode ser vazio.'),
   isInternal: z.boolean().default(false),
+  awaitRequesterResponse: z.boolean().optional().default(false),
 });
 
 export const updateTicketSchema = z.object({

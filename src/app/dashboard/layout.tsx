@@ -10,7 +10,8 @@ import {
   Layers, 
   ShieldAlert, 
   Briefcase,
-  Users
+  Users,
+  Clock
 } from 'lucide-react';
 
 export default async function DashboardLayout({
@@ -74,6 +75,12 @@ export default async function DashboardLayout({
       href: '/dashboard/admin/departments',
       label: 'Setores & Categorias',
       icon: <Briefcase size={20} />,
+      rolesAllowed: ['Administrador'],
+    },
+    {
+      href: '/dashboard/admin/sla',
+      label: 'Regras de SLA',
+      icon: <Clock size={20} />,
       rolesAllowed: ['Administrador'],
     },
     {

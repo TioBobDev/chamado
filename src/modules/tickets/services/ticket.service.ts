@@ -7,6 +7,7 @@ import { logger } from '@/shared/logger/logger';
 import { Priority } from '@prisma/client';
 import { workflowService } from '@/modules/workflows/services/workflow.service';
 import { notificationService } from '@/modules/notifications/services/notification.service';
+import { slaConfigService } from '@/modules/sla/services/sla-config.service';
 
 export class TicketService {
   async createTicket(companyId: string, requesterId: string, input: CreateTicketInput) {
@@ -38,23 +39,14 @@ export class TicketService {
       }
     }
 
-    // 2. Calcular SLA (caso exista regra cadastrada)
+    // 2. Calcular SLA (Hierarquia: Categoria/Atividade -> Setor -> Criticidade Global)
     let slaDeadline: Date | null = null;
-    const slaRule = await prisma.slaRule.findFirst({
-      where: {
-        companyId,
-        active: true,
-        OR: [
-          { categoryId: input.categoryId, priority: input.priority },
-          { departmentId: input.departmentId, priority: input.priority },
-          { priority: input.priority },
-        ],
-      },
-      orderBy: [
-        { categoryId: 'desc' }, // prioriza regra de categoria
-        { departmentId: 'desc' }, // depois regra de departamento
-      ],
-    });
+    const slaRule = await slaConfigService.resolveEffectiveSlaRule(
+      companyId,
+      input.departmentId,
+      input.categoryId,
+      input.priority
+    );
 
     if (slaRule) {
       slaDeadline = new Date(Date.now() + slaRule.resolutionTimeMinutes * 60 * 1000);
@@ -166,7 +158,14 @@ export class TicketService {
   }
 
   async getTicketDetails(ticketId: string, companyId: string, userId: string, role: string) {
-    return this.checkTicketInteractionPermission(ticketId, userId, companyId, role);
+    const ticket = await this.checkTicketInteractionPermission(ticketId, userId, companyId, role);
+    const slaRule = await slaConfigService.resolveEffectiveSlaRule(
+      companyId,
+      ticket.departmentId,
+      ticket.categoryId,
+      ticket.priority
+    );
+    return { ...ticket, slaRule };
   }
 
   async listTickets(companyId: string, userId: string, role: string, filters: TicketListFilters, page = 1, limit = 10) {
@@ -196,11 +195,16 @@ export class TicketService {
       });
       if (!status) throw new NotFoundError('Status de destino não encontrado.');
 
-      // Bloqueio de retrocesso: se estiver Em Atendimento, não pode voltar para Aberto
-      const isCurrentlyEmAtendimento = ticket.status.name === 'Em Atendimento' || ticket.statusId === 'status-atendimento';
+      // Bloqueio de retrocesso: se estiver Em Atendimento ou Aguardando resposta, não pode voltar para Aberto
+      const isCurrentlyActive =
+        ticket.status.name === 'Em Atendimento' ||
+        ticket.statusId === 'status-atendimento' ||
+        ticket.status.name === 'Aguardando resposta do solicitante' ||
+        ticket.statusId === 'status-aguardando-solicitante' ||
+        ticket.slaPausedAt !== null;
       const isTargetAberto = status.name === 'Aberto' || status.id === 'status-aberto' || status.isInitial;
 
-      if (isCurrentlyEmAtendimento && isTargetAberto) {
+      if (isCurrentlyActive && isTargetAberto) {
         throw new ValidationError('Não é permitido alterar o status para "Aberto" após o início do atendimento. Você deve transferir o atendimento para outra pessoa do setor ou encerrar o chamado.');
       }
 
@@ -210,9 +214,36 @@ export class TicketService {
 
       updates.statusId = input.statusId;
 
+      // Gerenciar pausa e retomada de SLA ao alterar status
+      const isTargetAwaiting =
+        status.name === 'Aguardando resposta do solicitante' ||
+        status.id === 'status-aguardando-solicitante';
+      const wasAwaiting =
+        ticket.status.name === 'Aguardando resposta do solicitante' ||
+        ticket.statusId === 'status-aguardando-solicitante' ||
+        ticket.slaPausedAt !== null;
+
+      if (isTargetAwaiting && !wasAwaiting) {
+        // Pausando SLA
+        updates.slaPausedAt = new Date();
+      } else if (wasAwaiting && !isTargetAwaiting) {
+        // Retomando SLA
+        if (!status.isFinal && ticket.slaPausedAt && ticket.slaDeadline) {
+          const pausedMs = Math.max(0, Date.now() - new Date(ticket.slaPausedAt).getTime());
+          updates.slaDeadline = new Date(new Date(ticket.slaDeadline).getTime() + pausedMs);
+        }
+        updates.slaPausedAt = null;
+      }
+
       // Se passou para um status final, registrar data de encerramento e comentário de solução
       if (status.isFinal) {
-        updates.closedAt = new Date();
+        const closedAt = new Date();
+        updates.closedAt = closedAt;
+        updates.slaPausedAt = null;
+        if (ticket.slaDeadline && closedAt > new Date(ticket.slaDeadline)) {
+          updates.slaViolated = true;
+        }
+
         if (input.resolutionSummary && input.resolutionSummary.trim()) {
           historyPromises.push(
             ticketRepository.addComment({
@@ -225,6 +256,27 @@ export class TicketService {
         }
       } else {
         updates.closedAt = null;
+      }
+
+      // Rastrear 1ª resposta quando entra em atendimento
+      if (status.name === 'Em Atendimento' && ticket.status.name !== 'Em Atendimento') {
+        const responseMinutes = Math.max(1, Math.round((Date.now() - new Date(ticket.createdAt).getTime()) / 60000));
+        const slaRule = await slaConfigService.resolveEffectiveSlaRule(
+          companyId,
+          ticket.departmentId,
+          ticket.categoryId,
+          ticket.priority
+        );
+        const targetResp = slaRule?.responseTimeMinutes || 120;
+        const withinSla = responseMinutes <= targetResp;
+        historyPromises.push(
+          ticketRepository.addHistory({
+            ticketId,
+            userId,
+            action: 'Primeira Resposta (SLA)',
+            newValue: `Atendimento iniciado em ${responseMinutes} min (${withinSla ? 'Dentro da meta ITIL de ' + targetResp + ' min' : 'Excedeu meta ITIL de ' + targetResp + ' min'})`,
+          })
+        );
       }
 
       historyPromises.push(
@@ -329,6 +381,21 @@ export class TicketService {
     // Validar e registrar alteração de Prioridade
     if (input.priority && input.priority !== ticket.priority) {
       updates.priority = input.priority;
+
+      // Recalcular SLA baseado na nova prioridade e regra de atividade
+      const slaRule = await slaConfigService.resolveEffectiveSlaRule(
+        companyId,
+        ticket.departmentId,
+        ticket.categoryId,
+        input.priority
+      );
+
+      if (slaRule) {
+        const newDeadline = new Date(new Date(ticket.createdAt).getTime() + slaRule.resolutionTimeMinutes * 60 * 1000);
+        updates.slaDeadline = newDeadline;
+        updates.slaViolated = newDeadline < new Date();
+      }
+
       historyPromises.push(
         ticketRepository.addHistory({
           ticketId,
@@ -375,6 +442,15 @@ export class TicketService {
       throw new UnauthorizedError('Solicitantes não podem adicionar comentários internos.');
     }
 
+    // Se o atendente marcar para aguardar resposta do solicitante
+    if (input.awaitRequesterResponse) {
+      if (userRole === 'Solicitante' || ticket.requesterId === userId) {
+        throw new ValidationError('O solicitante não pode marcar uma pergunta para aguardar resposta de si mesmo.');
+      }
+      // O comentário obrigatoriamente deve ser público para que o solicitante possa lê-lo e responder
+      input.isInternal = false;
+    }
+
     const comment = await ticketRepository.addComment({
       ticketId,
       userId,
@@ -389,8 +465,108 @@ export class TicketService {
       newValue: input.content.slice(0, 100) + (input.content.length > 100 ? '...' : ''),
     });
 
-    if (!input.isInternal) {
-      await notificationService.notifyTicketChange(ticketId, 'Novo Comentário', 'Um novo comentário público foi adicionado ao seu chamado.');
+    // 1. Caso a flag de aguardar resposta do solicitante tenha sido acionada
+    if (input.awaitRequesterResponse) {
+      const awaitingStatus = await prisma.ticketStatus.findFirst({
+        where: {
+          companyId,
+          OR: [
+            { id: 'status-aguardando-solicitante' },
+            { name: 'Aguardando resposta do solicitante' },
+            { name: { contains: 'Aguardando' } },
+          ],
+          active: true,
+        },
+      });
+
+      if (awaitingStatus) {
+        const now = new Date();
+        await ticketRepository.update(ticketId, {
+          statusId: awaitingStatus.id,
+          slaPausedAt: now,
+        });
+
+        await ticketRepository.addHistory({
+          ticketId,
+          userId,
+          action: 'Aguardando Solicitante',
+          oldValue: ticket.status.name,
+          newValue: 'Status alterado para "Aguardando resposta do solicitante". SLA pausado.',
+        });
+
+        const author = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { name: true },
+        });
+
+        await notificationService.notify({
+          userId: ticket.requesterId,
+          title: `Chamado #${ticket.number}: Aguardando sua resposta`,
+          message: `${author?.name || 'O atendente'} solicitou informações para prosseguir com seu chamado: "${input.content.slice(0, 120)}${input.content.length > 120 ? '...' : ''}"`,
+          type: 'IN_APP',
+        });
+      }
+    } else {
+      // 2. Caso o chamado estivesse em status 'Aguardando resposta do solicitante' (ou pausado) e uma resposta pública foi adicionada
+      const isCurrentlyAwaiting =
+        ticket.status.name === 'Aguardando resposta do solicitante' ||
+        ticket.statusId === 'status-aguardando-solicitante' ||
+        ticket.slaPausedAt !== null;
+
+      if (isCurrentlyAwaiting && !input.isInternal) {
+        const emAtendimentoStatus = await prisma.ticketStatus.findFirst({
+          where: {
+            companyId,
+            OR: [
+              { id: 'status-atendimento' },
+              { name: 'Em Atendimento' },
+            ],
+            active: true,
+          },
+        });
+
+        if (emAtendimentoStatus) {
+          let newSlaDeadline = ticket.slaDeadline;
+          let pausedMinutes = 0;
+
+          if (ticket.slaPausedAt && ticket.slaDeadline) {
+            const pausedMs = Math.max(0, Date.now() - new Date(ticket.slaPausedAt).getTime());
+            pausedMinutes = Math.round(pausedMs / 60000);
+            newSlaDeadline = new Date(new Date(ticket.slaDeadline).getTime() + pausedMs);
+          }
+
+          await ticketRepository.update(ticketId, {
+            statusId: emAtendimentoStatus.id,
+            slaDeadline: newSlaDeadline,
+            slaPausedAt: null,
+          });
+
+          await ticketRepository.addHistory({
+            ticketId,
+            userId,
+            action: 'Retomada de Atendimento',
+            oldValue: ticket.status.name,
+            newValue: `Resposta recebida. Status retornado para "Em Atendimento" e SLA retomado${pausedMinutes > 0 ? ` (+${pausedMinutes} min adicionados ao prazo)` : ''}.`,
+          });
+
+          if (ticket.attendantId && ticket.attendantId !== userId) {
+            await notificationService.notify({
+              userId: ticket.attendantId,
+              title: `Chamado #${ticket.number}: Solicitante respondeu`,
+              message: `${ticket.requester.name} enviou uma resposta no chamado #${ticket.number}. O atendimento foi retomado automaticamente.`,
+              type: 'IN_APP',
+            });
+          }
+        }
+      }
+
+      if (!input.isInternal) {
+        await notificationService.notifyTicketChange(
+          ticketId,
+          'Novo Comentário',
+          'Um novo comentário público foi adicionado ao seu chamado.'
+        );
+      }
     }
 
     return comment;

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Filter, AlertCircle, Clock, ChevronLeft, ChevronRight, PlusCircle } from 'lucide-react';
+import { Search, Filter, AlertCircle, Clock, ChevronLeft, ChevronRight, PlusCircle, CheckCircle2, PauseCircle } from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
 import { apiFetch } from '@/shared/utils/api';
 
@@ -12,10 +12,11 @@ interface Ticket {
   title: string;
   department: { name: string };
   category: { name: string };
-  status: { id: string; name: string; color: string };
+  status: { id: string; name: string; color: string; isFinal?: boolean };
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   slaDeadline: string | null;
   slaViolated: boolean;
+  slaPausedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,9 +64,8 @@ export default function DashboardPage() {
           setStatuses([
             { id: 'status-aberto', name: 'Aberto' },
             { id: 'status-atendimento', name: 'Em Atendimento' },
-            { id: 'status-aguardando', name: 'Aguardando Retorno' },
-            { id: 'status-resolvido', name: 'Resolvido' },
-            { id: 'status-fechado', name: 'Fechado' },
+            { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
+            { id: 'status-encerrado', name: 'Encerrado' },
           ]);
         }
       })
@@ -74,9 +74,8 @@ export default function DashboardPage() {
         setStatuses([
           { id: 'status-aberto', name: 'Aberto' },
           { id: 'status-atendimento', name: 'Em Atendimento' },
-          { id: 'status-aguardando', name: 'Aguardando Retorno' },
-          { id: 'status-resolvido', name: 'Resolvido' },
-          { id: 'status-fechado', name: 'Fechado' },
+          { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
+          { id: 'status-encerrado', name: 'Encerrado' },
         ]);
       });
   }, []);
@@ -132,6 +131,81 @@ export default function DashboardPage() {
       default:
         return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">Baixa</span>;
     }
+  };
+
+  const getSlaBadge = (ticket: Ticket) => {
+    if (!ticket.slaDeadline) {
+      return <span className="text-slate-500 text-xs">-</span>;
+    }
+
+    const now = Date.now();
+    const deadline = new Date(ticket.slaDeadline).getTime();
+    const isClosed = ticket.status.name === 'Encerrado' || ticket.status.isFinal;
+    const isPaused = ticket.status.name === 'Aguardando resposta do solicitante' || ticket.status.id === 'status-aguardando-solicitante' || !!ticket.slaPausedAt;
+    const isViolated = !isPaused && (ticket.slaViolated || (now > deadline && !isClosed));
+    const diffMs = deadline - now;
+
+    if (isClosed) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 font-medium">
+          <CheckCircle2 size={11} /> Resolvido
+        </span>
+      );
+    }
+
+    if (isPaused) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[11px] text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 font-medium">
+          <PauseCircle size={11} /> SLA Pausado
+        </span>
+      );
+    }
+
+    if (isViolated) {
+      const lateMins = Math.floor(Math.abs(diffMs) / 60000);
+      const lateHours = Math.floor(lateMins / 60);
+      const lateText = lateHours > 0 ? `${lateHours}h ${lateMins % 60}m` : `${lateMins}m`;
+
+      return (
+        <div className="flex flex-col gap-0.5">
+          <span className="inline-flex items-center gap-1 text-red-400 text-xs font-semibold bg-red-500/10 px-2 py-0.5 rounded-md border border-red-500/20 w-fit">
+            <AlertCircle size={11} /> Estourado
+          </span>
+          <span className="text-[10px] text-red-400/80 font-mono">
+            Atrasado há {lateText}
+          </span>
+        </div>
+      );
+    }
+
+    const remMins = Math.floor(diffMs / 60000);
+    const remHours = Math.floor(remMins / 60);
+    const remDays = Math.floor(remHours / 24);
+    const isUrgentNotice = remHours < 2;
+
+    let remText = '';
+    if (remDays > 0) {
+      remText = `${remDays}d ${remHours % 24}h restam`;
+    } else if (remHours > 0) {
+      remText = `${remHours}h ${remMins % 60}m restam`;
+    } else {
+      remText = `${remMins}m restam`;
+    }
+
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md border w-fit font-medium ${
+          isUrgentNotice 
+            ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' 
+            : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+        }`}>
+          <Clock size={11} /> {isUrgentNotice ? 'Atenção' : 'No Prazo'}
+        </span>
+        <span className="text-[10px] text-slate-400 font-mono">
+          {remText}
+        </span>
+      </div>
+    );
   };
 
   return (
@@ -269,19 +343,7 @@ export default function DashboardPage() {
                       {getPriorityBadge(t.priority)}
                     </td>
                     <td className="py-4 px-6">
-                      {t.slaDeadline ? (
-                        t.slaViolated ? (
-                          <span className="flex items-center gap-1.5 text-red-400 text-xs font-semibold">
-                            <AlertCircle size={14} /> Estourado
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1.5 text-emerald-400 text-xs">
-                            <Clock size={14} /> {new Date(t.slaDeadline).toLocaleDateString('pt-BR')}
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-slate-500 text-xs">-</span>
-                      )}
+                      {getSlaBadge(t)}
                     </td>
                     <td className="py-4 px-6 text-slate-500 text-xs">
                       {formatDateTime(t.updatedAt)}

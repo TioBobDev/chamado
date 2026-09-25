@@ -21,6 +21,7 @@ async function main() {
   const canonicalStatuses = [
     { id: 'status-aberto', name: 'Aberto', color: '#3b82f6', isInitial: true, isFinal: false },
     { id: 'status-atendimento', name: 'Em Atendimento', color: '#f59e0b', isInitial: false, isFinal: false },
+    { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante', color: '#8b5cf6', isInitial: false, isFinal: false },
     { id: 'status-encerrado', name: 'Encerrado', color: '#10b981', isInitial: false, isFinal: true },
   ];
 
