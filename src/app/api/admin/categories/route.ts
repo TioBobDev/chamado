@@ -1,5 +1,5 @@
 import { getCurrentUserSession } from '@/modules/departments/controllers/department.controller';
-import { handleApiError, UnauthorizedError, ValidationError } from '@/shared/errors/errors';
+import { handleApiError, UnauthorizedError, ValidationError, ConflictError } from '@/shared/errors/errors';
 import { prisma } from '@/shared/database/database';
 
 export async function POST(request: Request) {
@@ -29,9 +29,30 @@ export async function POST(request: Request) {
       throw new ValidationError('O departamento selecionado é inválido.');
     }
 
+    const trimmedCat = name.trim();
+    const existingCat = await prisma.ticketCategory.findFirst({
+      where: {
+        departmentId,
+        companyId: session.companyId,
+        name: trimmedCat,
+      },
+    });
+
+    if (existingCat) {
+      if (existingCat.active) {
+        throw new ConflictError(`Já existe uma categoria cadastrada com o nome "${trimmedCat}" neste setor.`);
+      } else {
+        const reactivated = await prisma.ticketCategory.update({
+          where: { id: existingCat.id },
+          data: { active: true },
+        });
+        return Response.json(reactivated, { status: 200 });
+      }
+    }
+
     const newCategory = await prisma.ticketCategory.create({
       data: {
-        name: name.trim(),
+        name: trimmedCat,
         departmentId,
         companyId: session.companyId,
       },

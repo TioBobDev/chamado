@@ -123,6 +123,18 @@ async function apply() {
     console.log('Info status:', err.message);
   }
 
+  // 6. Atualizar ENUM type em ticket_custom_fields para incluir CHECKBOX
+  try {
+    console.log('6. Verificando ENUM type em ticket_custom_fields...');
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE ticket_custom_fields 
+      MODIFY COLUMN type ENUM('TEXT', 'NUMBER', 'SELECT', 'DATE', 'BOOLEAN', 'CHECKBOX') NOT NULL DEFAULT 'TEXT';
+    `);
+    console.log('✓ ENUM type atualizado com CHECKBOX com sucesso!');
+  } catch (err) {
+    console.log('Info ENUM type:', err.message);
+  }
+
   console.log('=== MIGRAÇÕES CONCLUÍDAS COM SUCESSO! ===\n');
 }
 

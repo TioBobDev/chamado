@@ -69,7 +69,7 @@ function ResetPasswordContent() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Falha ao redefinir a senha.');
+        throw new Error(result.message || result.error || 'Falha ao redefinir a senha.');
       }
 
       setSuccess(true);

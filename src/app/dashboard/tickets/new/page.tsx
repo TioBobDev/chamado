@@ -42,7 +42,7 @@ interface Department {
 interface CustomField {
   id: string;
   name: string;
-  type: 'TEXT' | 'NUMBER' | 'SELECT' | 'DATE' | 'BOOLEAN';
+  type: 'TEXT' | 'NUMBER' | 'SELECT' | 'DATE' | 'BOOLEAN' | 'CHECKBOX';
   options: string | null;
   isRequired: boolean;
 }
@@ -77,6 +77,7 @@ export default function NewTicketPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [checkboxValues, setCheckboxValues] = useState<Record<string, string[]>>({});
   const [activeCategorySla, setActiveCategorySla] = useState<CategorySlaRule | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
@@ -105,16 +106,43 @@ export default function NewTicketPage() {
   const watchedCategoryId = watch('categoryId');
   const watchedPriority = watch('priority') || 'MEDIUM';
 
+  const handleToggleCheckboxOption = (fieldId: string, option: string) => {
+    setCheckboxValues((prev) => {
+      const currentList = prev[fieldId] || [];
+      const updated = currentList.includes(option)
+        ? currentList.filter((item) => item !== option)
+        : [...currentList, option];
+
+      const stringValue = updated.length > 0 ? updated.join(', ') : '';
+      setValue(`customFields.${fieldId}`, stringValue, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
+
+      return {
+        ...prev,
+        [fieldId]: updated,
+      };
+    });
+  };
+
   // Carrega os departamentos no início
   useEffect(() => {
     apiFetch('/api/departments?excludeMyDepartments=true')
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error('Erro ao carregar dados do formulário');
+        }
+        return res.json();
+      })
       .then((data) => {
-        setDepartments(data);
+        setDepartments(Array.isArray(data) ? data : []);
         setLoadingConfig(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Erro ao listar departamentos:', err);
         setError('Erro ao carregar dados do formulário.');
+        setDepartments([]);
         setLoadingConfig(false);
       });
   }, []);
@@ -126,14 +154,16 @@ export default function NewTicketPage() {
       setValue('categoryId', '');
       setActiveCategorySla(null);
       setCustomFields([]);
+      setCheckboxValues({});
       return;
     }
 
-    const dept = departments.find((d) => d.id === watchedDeptId) || null;
+    const dept = (departments || []).find((d) => d.id === watchedDeptId) || null;
     setSelectedDept(dept);
     setValue('categoryId', '');
     setActiveCategorySla(null);
     setCustomFields([]);
+    setCheckboxValues({});
   }, [watchedDeptId, departments, setValue]);
 
   // Monitora a troca de categoria para detectar SLA específico da atividade
@@ -143,7 +173,7 @@ export default function NewTicketPage() {
       return;
     }
 
-    const cat = selectedDept.categories.find((c) => c.id === watchedCategoryId);
+    const cat = selectedDept.categories?.find((c) => c.id === watchedCategoryId);
     const activeRule = cat?.slaRules?.find((r) => r.active);
 
     if (activeRule) {
@@ -171,17 +201,27 @@ export default function NewTicketPage() {
   useEffect(() => {
     if (!watchedDeptId || !watchedCategoryId) {
       setCustomFields([]);
+      setCheckboxValues({});
       return;
     }
 
     setLoadingFields(true);
     apiFetch(`/api/departments/${watchedDeptId}/fields?categoryId=${watchedCategoryId}`)
-      .then((res) => res.json())
+      .then(async (res) => {
+        if (!res.ok) {
+          throw new Error('Falha ao carregar campos da categoria');
+        }
+        return res.json();
+      })
       .then((fields) => {
-        setCustomFields(fields || []);
+        setCustomFields(Array.isArray(fields) ? fields : []);
+        setCheckboxValues({});
         setLoadingFields(false);
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('Erro ao buscar campos da categoria:', err);
+        setCustomFields([]);
+        setCheckboxValues({});
         setLoadingFields(false);
       });
   }, [watchedDeptId, watchedCategoryId]);
@@ -311,7 +351,7 @@ export default function NewTicketPage() {
               className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-200 py-3 px-4 focus:outline-none focus:border-sky-400 text-sm"
             >
               <option value="">Selecione...</option>
-              {departments.map((d) => (
+              {(departments || []).map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
@@ -331,7 +371,7 @@ export default function NewTicketPage() {
               className="w-full bg-slate-950/40 border border-slate-800 rounded-xl text-slate-200 py-3 px-4 focus:outline-none focus:border-sky-400 text-sm disabled:opacity-40"
             >
               <option value="">Selecione...</option>
-              {selectedDept?.categories.map((c) => (
+              {(selectedDept?.categories || []).map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
@@ -488,7 +528,7 @@ export default function NewTicketPage() {
 
             {loadingFields ? (
               <div className="py-4 text-xs text-slate-500 animate-pulse">Carregando campos da categoria...</div>
-            ) : customFields.length === 0 ? (
+            ) : !Array.isArray(customFields) || customFields.length === 0 ? (
               <p className="text-xs text-slate-500 italic">Sem perguntas adicionais para esta categoria.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -541,6 +581,41 @@ export default function NewTicketPage() {
                             <option key={opt.trim()} value={opt.trim()}>{opt.trim()}</option>
                           ))}
                         </select>
+                      )}
+
+                      {/* CHECKBOX multi-options */}
+                      {field.type === 'CHECKBOX' && (
+                        <div className="space-y-2">
+                          <input
+                            type="hidden"
+                            {...register(`customFields.${field.id}`, { required: requiredRule })}
+                          />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {field.options?.split(',').map((opt) => {
+                              const optionLabel = opt.trim();
+                              if (!optionLabel) return null;
+                              const isChecked = (checkboxValues[field.id] || []).includes(optionLabel);
+                              return (
+                                <label
+                                  key={optionLabel}
+                                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-xs cursor-pointer select-none transition-all ${
+                                    isChecked
+                                      ? 'bg-amber-500/15 border-amber-500/50 text-amber-200 shadow-sm'
+                                      : 'bg-slate-950/40 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900/40'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleToggleCheckboxOption(field.id, optionLabel)}
+                                    className="w-4 h-4 rounded bg-slate-950/60 border border-slate-700 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                                  />
+                                  <span className="font-medium">{optionLabel}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
 
                       {/* BOOLEAN checkbox */}

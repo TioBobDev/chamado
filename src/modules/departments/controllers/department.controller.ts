@@ -51,7 +51,7 @@ export class DepartmentController {
           select: { departmentId: true },
         });
         const myDeptIds = userDepts.map((ud) => ud.departmentId);
-        departments = departments.filter((d) => !myDeptIds.includes(d.id));
+        departments = departments.filter((d: any) => !myDeptIds.includes(d.id));
       }
 
       return Response.json(departments);
@@ -64,7 +64,7 @@ export class DepartmentController {
     try {
       await getCurrentUserSession(); // Garante autenticação
       const fields = await departmentService.getDepartmentCustomFields(departmentId, categoryId);
-      return Response.json(fields);
+      return Response.json(Array.isArray(fields) ? fields : []);
     } catch (error) {
       return handleApiError(error);
     }

@@ -10,7 +10,9 @@ import {
   Trash2,
   FileSpreadsheet,
   Briefcase,
-  HelpCircle
+  HelpCircle,
+  Plus,
+  X
 } from 'lucide-react';
 import { apiFetch } from '@/shared/utils/api';
 
@@ -50,9 +52,13 @@ export default function SectorsAndCategoriesPage() {
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldType, setNewFieldType] = useState('TEXT');
   const [newFieldOptions, setNewFieldOptions] = useState('');
+  const [fieldOptionsList, setFieldOptionsList] = useState<string[]>([]);
+  const [optionInput, setOptionInput] = useState('');
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldDeptId, setNewFieldDeptId] = useState('');
   const [newFieldCategoryId, setNewFieldCategoryId] = useState('');
+  const [fieldFormError, setFieldFormError] = useState<string | null>(null);
+  const [fieldFormSuccess, setFieldFormSuccess] = useState<string | null>(null);
 
   // Carregar dados de topologia
   const loadTopology = async () => {
@@ -79,22 +85,33 @@ export default function SectorsAndCategoriesPage() {
   // Cadastro de Setor
   const handleCreateDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDeptName.trim()) return;
+    const trimmed = newDeptName.trim();
+    if (!trimmed) return;
     
     clearMessages();
+
+    // Verificação de duplicidade de nome no client-side
+    const duplicate = departments.some(
+      (d) => d.name.trim().toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) {
+      setErrorMsg(`Já existe um setor cadastrado com o nome "${trimmed}".`);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const res = await apiFetch('/api/admin/departments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newDeptName }),
+        body: JSON.stringify({ name: trimmed }),
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || 'Erro ao cadastrar setor.');
 
-      setSuccessMsg(`Setor "${newDeptName}" cadastrado com sucesso!`);
+      setSuccessMsg(`Setor "${trimmed}" cadastrado com sucesso!`);
       setNewDeptName('');
       await loadTopology();
     } catch (err: any) {
@@ -107,22 +124,35 @@ export default function SectorsAndCategoriesPage() {
   // Cadastro de Categoria
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName.trim() || !newCatDeptId) return;
+    const trimmedCat = newCatName.trim();
+    if (!trimmedCat || !newCatDeptId) return;
 
     clearMessages();
+
+    // Verificação de duplicidade na categoria do setor
+    const targetDept = departments.find((d) => d.id === newCatDeptId);
+    if (
+      targetDept?.categories.some(
+        (c) => c.name.trim().toLowerCase() === trimmedCat.toLowerCase()
+      )
+    ) {
+      setErrorMsg(`A categoria "${trimmedCat}" já existe neste setor.`);
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const res = await apiFetch('/api/admin/categories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCatName, departmentId: newCatDeptId }),
+        body: JSON.stringify({ name: trimmedCat, departmentId: newCatDeptId }),
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || 'Erro ao cadastrar categoria.');
 
-      setSuccessMsg(`Categoria "${newCatName}" cadastrada com sucesso!`);
+      setSuccessMsg(`Categoria "${trimmedCat}" cadastrada com sucesso!`);
       setNewCatName('');
       setNewCatDeptId('');
       await loadTopology();
@@ -133,40 +163,92 @@ export default function SectorsAndCategoriesPage() {
     }
   };
 
+  // Gestão de opções para Checkbox e Seleção
+  const handleAddOption = () => {
+    if (!optionInput.trim()) return;
+    const splitItems = optionInput
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+
+    setFieldOptionsList((prev) => {
+      const uniqueNew = splitItems.filter((it) => !prev.includes(it));
+      return [...prev, ...uniqueNew];
+    });
+    setOptionInput('');
+  };
+
+  const handleRemoveOption = (indexToRemove: number) => {
+    setFieldOptionsList((prev) => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
   // Cadastro de Campo Personalizado
   const handleCreateCustomField = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFieldName.trim() || !newFieldType || !newFieldDeptId) return;
-
+    setFieldFormError(null);
+    setFieldFormSuccess(null);
     clearMessages();
+
+    if (!newFieldName.trim()) {
+      setFieldFormError('Por favor, informe o Nome da Informação (Label).');
+      return;
+    }
+
+    if (!newFieldDeptId) {
+      setFieldFormError('Por favor, selecione o Setor do Chamado.');
+      return;
+    }
+
+    const isOptionsType = newFieldType === 'SELECT' || newFieldType === 'CHECKBOX';
+
+    // Captura opções das tags e qualquer texto que o usuário digitou no input no momento
+    const pendingOptions = optionInput
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const mergedOptions = Array.from(new Set([...fieldOptionsList, ...pendingOptions]));
+
+    if (isOptionsType && mergedOptions.length === 0) {
+      setFieldFormError('Informe pelo menos uma opção para o campo de Checkbox/Seleção.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
+      const optionsPayload = isOptionsType ? mergedOptions.join(', ') : null;
+
       const res = await apiFetch(`/api/admin/departments/${newFieldDeptId}/fields`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newFieldName,
+          name: newFieldName.trim(),
           type: newFieldType,
-          options: newFieldType === 'SELECT' ? newFieldOptions : null,
+          options: optionsPayload,
           isRequired: newFieldRequired,
-          categoryId: newFieldCategoryId || null,
+          categoryId: newFieldCategoryId && newFieldCategoryId.trim() !== '' ? newFieldCategoryId : null,
         }),
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.message || 'Erro ao cadastrar campo personalizado.');
 
-      setSuccessMsg(`Campo personalizado "${newFieldName}" cadastrado com sucesso!`);
+      const successText = `Campo personalizado "${newFieldName}" cadastrado com sucesso!`;
+      setFieldFormSuccess(successText);
+      setSuccessMsg(successText);
       setNewFieldName('');
       setNewFieldType('TEXT');
       setNewFieldOptions('');
+      setFieldOptionsList([]);
+      setOptionInput('');
       setNewFieldRequired(false);
       setNewFieldDeptId('');
       setNewFieldCategoryId('');
       await loadTopology();
     } catch (err: any) {
-      setErrorMsg(err.message);
+      setFieldFormError(err.message || 'Erro ao cadastrar campo personalizado.');
+      setErrorMsg(err.message || 'Erro ao cadastrar campo personalizado.');
     } finally {
       setSubmitting(false);
     }
@@ -312,9 +394,13 @@ export default function SectorsAndCategoriesPage() {
               <label className="block text-[10px] text-slate-400 uppercase font-semibold">Nome da Informação (Label)</label>
               <input
                 type="text"
-                placeholder="Ex: Endereço IP, Modelo do Monitor, CPF"
+                placeholder="Ex: Formato, Tamanho, Sistema Operacional"
                 value={newFieldName}
-                onChange={(e) => setNewFieldName(e.target.value)}
+                onChange={(e) => {
+                  setNewFieldName(e.target.value);
+                  setFieldFormError(null);
+                  setFieldFormSuccess(null);
+                }}
                 className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-200 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs"
               />
             </div>
@@ -323,27 +409,92 @@ export default function SectorsAndCategoriesPage() {
               <label className="block text-[10px] text-slate-400 uppercase font-semibold">Tipo do Campo</label>
               <select
                 value={newFieldType}
-                onChange={(e) => setNewFieldType(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNewFieldType(val);
+                  if (val !== 'SELECT' && val !== 'CHECKBOX') {
+                    setFieldOptionsList([]);
+                    setOptionInput('');
+                  }
+                }}
                 className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-300 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs"
               >
                 <option value="TEXT">Texto Livre</option>
                 <option value="NUMBER">Número</option>
                 <option value="SELECT">Seleção (Múltiplas Opções)</option>
+                <option value="CHECKBOX">Checkbox</option>
                 <option value="DATE">Data</option>
                 <option value="BOOLEAN">Booleano (Sim/Não)</option>
               </select>
             </div>
 
-            {newFieldType === 'SELECT' && (
-              <div className="space-y-1 animate-fadeIn">
-                <label className="block text-[10px] text-slate-400 uppercase font-semibold">Opções de Seleção (separadas por vírgula)</label>
-                <input
-                  type="text"
-                  placeholder="Ex: Notebook, Desktop, Servidor"
-                  value={newFieldOptions}
-                  onChange={(e) => setNewFieldOptions(e.target.value)}
-                  className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-200 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs"
-                />
+            {(newFieldType === 'SELECT' || newFieldType === 'CHECKBOX') && (
+              <div className="space-y-2 p-3 bg-slate-950/50 rounded-xl border border-slate-800/80 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] text-slate-300 uppercase font-semibold">
+                    {newFieldType === 'CHECKBOX' ? 'Opções do Checkbox' : 'Opções de Seleção'}
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {fieldOptionsList.length} {fieldOptionsList.length === 1 ? 'opção' : 'opções'}
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={
+                      newFieldType === 'CHECKBOX'
+                        ? 'Ex: Presencial, Online (ou tecle Enter)'
+                        : 'Ex: Notebook, Desktop (ou tecle Enter)'
+                    }
+                    value={optionInput}
+                    onChange={(e) => setOptionInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddOption();
+                      }
+                    }}
+                    className="flex-1 bg-slate-950/60 border border-slate-800 rounded-lg text-slate-200 py-1.5 px-3 focus:outline-none focus:border-amber-400 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddOption}
+                    className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                  >
+                    <Plus size={14} /> Adicionar
+                  </button>
+                </div>
+
+                {fieldOptionsList.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {fieldOptionsList.map((opt, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 text-xs bg-slate-900 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg"
+                      >
+                        {newFieldType === 'CHECKBOX' && (
+                          <span className="w-2 h-2 rounded-sm border border-amber-400/80 bg-amber-400/20 inline-block"></span>
+                        )}
+                        <span>{opt}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveOption(idx)}
+                          className="text-slate-400 hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
+                          title={`Remover "${opt}"`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-amber-400/80 italic">
+                    {newFieldType === 'CHECKBOX'
+                      ? 'Adicione N opções que os usuários poderão selecionar via checkbox.'
+                      : 'Adicione as opções que aparecerão na lista de seleção.'}
+                  </p>
+                )}
               </div>
             )}
 
@@ -354,6 +505,8 @@ export default function SectorsAndCategoriesPage() {
                 onChange={(e) => {
                   setNewFieldDeptId(e.target.value);
                   setNewFieldCategoryId('');
+                  setFieldFormError(null);
+                  setFieldFormSuccess(null);
                 }}
                 className="w-full bg-slate-950/40 border border-slate-800 rounded-lg text-slate-300 py-2 px-3 focus:outline-none focus:border-sky-400 text-xs"
               >
@@ -392,12 +545,26 @@ export default function SectorsAndCategoriesPage() {
               </label>
             </div>
 
+            {fieldFormError && (
+              <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs flex items-center gap-2 animate-fadeIn">
+                <XCircle size={15} className="shrink-0 text-red-400" />
+                <span className="font-medium">{fieldFormError}</span>
+              </div>
+            )}
+
+            {fieldFormSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 size={15} className="shrink-0 text-emerald-400" />
+                <span className="font-medium">{fieldFormSuccess}</span>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={submitting || !newFieldName.trim() || !newFieldDeptId}
-              className="w-full py-2 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-40"
+              disabled={submitting}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 font-bold text-xs rounded-lg transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-amber-950/20"
             >
-              {submitting ? <Loader2 className="animate-spin inline mr-1" size={12} /> : null}
+              {submitting ? <Loader2 className="animate-spin inline mr-1" size={13} /> : null}
               Criar Campo
             </button>
           </form>
@@ -463,6 +630,15 @@ export default function SectorsAndCategoriesPage() {
                               <span className="text-[8px] bg-slate-900 text-slate-500 border border-slate-800 px-1.5 py-0.2 rounded font-semibold uppercase">
                                 {cf.type}
                               </span>
+
+                              {cf.options && (
+                                <span
+                                  className="text-[8px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.2 rounded font-medium"
+                                  title={`Opções: ${cf.options}`}
+                                >
+                                  {cf.options.split(',').length} opç.
+                                </span>
+                              )}
 
                               {/* Delete Custom Field Button */}
                               <button

@@ -1,8 +1,9 @@
 import { userRepository } from '@/modules/users/repositories/user.repository';
 import { security, UserSessionPayload } from '@/shared/security/security';
-import { UnauthorizedError, ValidationError } from '@/shared/errors/errors';
+import { UnauthorizedError, ValidationError, AppError } from '@/shared/errors/errors';
 import { prisma } from '@/shared/database/database';
 import { emailService } from '@/shared/email/email.service';
+import { logger } from '@/shared/logger/logger';
 import crypto from 'crypto';
 
 export class AuthService {
@@ -88,7 +89,12 @@ export class AuthService {
     });
 
     // 4. Dispara e-mail com o link de recuperação
-    await emailService.sendPasswordResetEmail(user.email, user.name, token);
+    try {
+      await emailService.sendPasswordResetEmail(user.email, user.name, token);
+    } catch (emailErr) {
+      logger.error('Falha ao enviar e-mail de recuperação:', emailErr);
+      throw new AppError('Falha ao enviar o e-mail de recuperação. Verifique as configurações de SMTP ou tente novamente mais tarde.', 500);
+    }
 
     // 5. Registra log de auditoria
     await prisma.auditLog.create({

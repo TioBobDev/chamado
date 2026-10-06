@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Não foi possível processar a solicitação.');
+        throw new Error(result.message || result.error || 'Não foi possível processar a solicitação.');
       }
 
       setSuccessMessage(

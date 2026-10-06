@@ -2,7 +2,10 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 const prismaClientSingleton = () => {
-  const dbUrl = process.env.DATABASE_URL || 'mysql://root:123456@localhost:3306/chamado';
+  let dbUrl = process.env.DATABASE_URL || 'mysql://root:123456@localhost:3306/chamado';
+  if (!dbUrl.includes('allowPublicKeyRetrieval=')) {
+    dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'allowPublicKeyRetrieval=true';
+  }
   const adapter = new PrismaMariaDb(dbUrl);
 
   return new PrismaClient({

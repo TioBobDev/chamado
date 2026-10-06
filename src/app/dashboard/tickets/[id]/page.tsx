@@ -748,7 +748,23 @@ export default function TicketDetailPage() {
                   {ticket.customValues.map((cv) => (
                     <div key={cv.id} className="p-3 bg-slate-950/20 border border-slate-900 rounded-lg">
                       <span className="block text-[10px] text-slate-500 uppercase font-semibold">{cv.field.name}</span>
-                      <span className="text-sm text-slate-300 mt-0.5 block">{cv.value === 'true' ? 'Confirmado' : cv.value === 'false' ? 'Não' : cv.value}</span>
+                      {cv.field.type === 'CHECKBOX' ? (
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {cv.value.split(',').map((val, idx) => (
+                            <span
+                              key={idx}
+                              className="text-xs bg-slate-900/90 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-medium inline-flex items-center gap-1.5"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                              {val.trim()}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-slate-300 mt-0.5 block">
+                          {cv.value === 'true' ? 'Confirmado' : cv.value === 'false' ? 'Não' : cv.value}
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>

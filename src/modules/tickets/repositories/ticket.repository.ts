@@ -22,39 +22,107 @@ export class TicketRepository {
   }
 
   async findById(id: string) {
-    return prisma.ticket.findUnique({
-      where: { id },
-      include: {
-        requester: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
-        attendant: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        department: true,
-        category: true,
-        status: true,
-        team: true,
-        comments: {
-          include: {
-            user: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+    try {
+      return await prisma.ticket.findUnique({
+        where: { id },
+        include: {
+          requester: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+          attendant: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          department: true,
+          category: true,
+          status: true,
+          team: true,
+          comments: {
+            include: {
+              user: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+            },
+            orderBy: { createdAt: 'asc' },
           },
-          orderBy: { createdAt: 'asc' },
-        },
-        history: {
-          include: {
-            user: { select: { id: true, name: true } },
+          history: {
+            include: {
+              user: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: 'desc' },
           },
-          orderBy: { createdAt: 'desc' },
-        },
-        attachments: {
-          include: {
-            uploadedBy: { select: { id: true, name: true } },
+          attachments: {
+            include: {
+              uploadedBy: { select: { id: true, name: true } },
+            },
+          },
+          customValues: {
+            include: {
+              field: true,
+            },
           },
         },
-        customValues: {
-          include: {
-            field: true,
+      });
+    } catch (err: any) {
+      console.warn('[FALLBACK SQL findById Ticket]:', err?.message);
+      const ticket = await prisma.ticket.findUnique({
+        where: { id },
+        include: {
+          requester: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+          attendant: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          department: true,
+          category: true,
+          status: true,
+          team: true,
+          comments: {
+            include: {
+              user: { select: { id: true, name: true, email: true, avatarUrl: true, role: { select: { name: true } } } },
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          history: {
+            include: {
+              user: { select: { id: true, name: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+          },
+          attachments: {
+            include: {
+              uploadedBy: { select: { id: true, name: true } },
+            },
           },
         },
-      },
-    });
+      });
+
+      if (!ticket) return null;
+
+      const customValuesRaw = await prisma.$queryRawUnsafe<any[]>(
+        `SELECT cv.*, cf.name as field_name, cf.type as field_type, cf.options as field_options, 
+                cf.department_id as field_dept_id, cf.category_id as field_cat_id, 
+                cf.is_required as field_is_required, cf.active as field_active
+         FROM ticket_custom_values cv
+         INNER JOIN ticket_custom_fields cf ON cv.field_id = cf.id
+         WHERE cv.ticket_id = ?`,
+        id
+      );
+
+      const customValues = customValuesRaw.map((cv) => ({
+        id: cv.id,
+        ticketId: cv.ticket_id,
+        fieldId: cv.field_id,
+        value: cv.value,
+        createdAt: cv.created_at,
+        updatedAt: cv.updated_at,
+        field: {
+          id: cv.field_id,
+          name: cv.field_name,
+          type: cv.field_type,
+          options: cv.field_options,
+          departmentId: cv.field_dept_id,
+          categoryId: cv.field_cat_id,
+          isRequired: !!cv.field_is_required,
+          active: !!cv.field_active,
+        },
+      }));
+
+      return {
+        ...ticket,
+        customValues,
+      } as any;
+    }
   }
 
   async list(companyId: string, userId: string, role: string, filters: TicketListFilters, skip = 0, limit = 10) {

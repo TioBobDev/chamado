@@ -295,6 +295,7 @@ enum CustomFieldType {
   SELECT
   DATE
   BOOLEAN
+  CHECKBOX
 }
 
 model TicketCustomField {

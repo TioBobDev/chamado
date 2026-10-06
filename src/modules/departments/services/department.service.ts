@@ -15,11 +15,12 @@ export class DepartmentService {
   }
 
   async getDepartmentCustomFields(departmentId: string, categoryId?: string | null) {
-    const department = await departmentRepository.findById(departmentId);
-    if (!department) {
+    const exists = await departmentRepository.exists(departmentId);
+    if (!exists) {
       throw new NotFoundError('Departamento não encontrado.');
     }
-    return departmentRepository.getCustomFieldsByDepartment(departmentId, categoryId);
+    const cleanCategoryId = categoryId && categoryId !== 'null' && categoryId !== 'undefined' ? categoryId : null;
+    return departmentRepository.getCustomFieldsByDepartment(departmentId, cleanCategoryId);
   }
 }
 
