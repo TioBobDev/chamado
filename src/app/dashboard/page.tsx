@@ -2,7 +2,18 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Filter, AlertCircle, Clock, ChevronLeft, ChevronRight, PlusCircle, CheckCircle2, PauseCircle } from 'lucide-react';
+import { 
+  Search, 
+  Filter, 
+  AlertCircle, 
+  Clock, 
+  ChevronLeft, 
+  ChevronRight, 
+  PlusCircle, 
+  CheckCircle2, 
+  PauseCircle,
+  RotateCcw
+} from 'lucide-react';
 import { formatDateTime } from '@/shared/utils/utils';
 import { apiFetch } from '@/shared/utils/api';
 
@@ -21,6 +32,15 @@ interface Ticket {
   updatedAt: string;
 }
 
+const DEFAULT_STATUSES = [
+  { id: 'status-aberto', name: 'Aberto' },
+  { id: 'status-atendimento', name: 'Em Atendimento' },
+  { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
+  { id: 'status-encerrado', name: 'Encerrado' },
+];
+
+const PAGE_LIMIT = 5;
+
 export default function DashboardPage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,65 +52,59 @@ export default function DashboardPage() {
   const [priority, setPriority] = useState('');
   
   // Status auxiliares carregados
-  const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
+  const [statuses, setStatuses] = useState<{ id: string; name: string }[]>(DEFAULT_STATUSES);
   
-  // Paginação
+  // Paginação (5 chamados por página)
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const limit = 10;
+  const [totalTickets, setTotalTickets] = useState(0);
 
-  // Carregar status para o filtro
+  // Carregar status para o filtro ordenado pelo ciclo de vida
   useEffect(() => {
-    // Busca departamentos e consequentemente traz os status no seed ou podemos fazer rota,
-    // mas para simplificar faremos um fetch rápido
-    apiFetch('/api/departments')
-      .then((res) => res.json())
-      .then((depts) => {
-        // Coleta status únicos cadastrados na empresa
-        const allStatusesMap: Record<string, string> = {};
-        depts.forEach((dept: any) => {
-          if (dept.company && dept.company.ticketStatuses) {
-            dept.company.ticketStatuses.forEach((st: any) => {
-              allStatusesMap[st.id] = st.name;
-            });
-          }
+    apiFetch('/api/tickets/statuses')
+      .then((res) => {
+        if (!res.ok) throw new Error('Falha ao obter status');
+        return res.json();
+      })
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        const orderWeight: Record<string, number> = {
+          'status-aberto': 1,
+          'Aberto': 1,
+          'status-atendimento': 2,
+          'Em Atendimento': 2,
+          'status-aguardando-solicitante': 3,
+          'Aguardando resposta do solicitante': 3,
+          'status-encerrado': 4,
+          'Encerrado': 4,
+        };
+
+        const sorted = [...list].sort((a, b) => {
+          const wA = orderWeight[a.id] ?? orderWeight[a.name] ?? 99;
+          const wB = orderWeight[b.id] ?? orderWeight[b.name] ?? 99;
+          return wA - wB;
         });
-        
-        // Fallback fixo se vazio
-        const loadedStatuses = Object.entries(allStatusesMap).map(([id, name]) => ({ id, name }));
-        if (loadedStatuses.length > 0) {
-          setStatuses(loadedStatuses);
-        } else {
-          setStatuses([
-            { id: 'status-aberto', name: 'Aberto' },
-            { id: 'status-atendimento', name: 'Em Atendimento' },
-            { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
-            { id: 'status-encerrado', name: 'Encerrado' },
-          ]);
+
+        if (sorted.length > 0) {
+          setStatuses(sorted);
         }
       })
-      .catch(() => {
-        // Fallback em caso de erro na API de departamentos
-        setStatuses([
-          { id: 'status-aberto', name: 'Aberto' },
-          { id: 'status-atendimento', name: 'Em Atendimento' },
-          { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
-          { id: 'status-encerrado', name: 'Encerrado' },
-        ]);
+      .catch((err) => {
+        console.warn('Usando status padrão de fallback:', err);
       });
   }, []);
 
-  // Carregar chamados
-  const loadTickets = async () => {
+  // Carregar chamados com paginação de 5 itens
+  const loadTickets = async (targetPage = page) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
+        page: String(targetPage),
+        limit: String(PAGE_LIMIT),
       });
 
-      if (search) params.append('search', search);
+      if (search.trim()) params.append('search', search.trim());
       if (statusId) params.append('statusId', statusId);
       if (priority) params.append('priority', priority);
 
@@ -99,8 +113,16 @@ export default function DashboardPage() {
         throw new Error('Falha ao carregar os chamados.');
       }
       const result = await response.json();
-      setTickets(result.data);
-      setTotalPages(result.meta.totalPages || 1);
+      const loadedTickets = (result.data || []) as Ticket[];
+      setTickets(loadedTickets);
+
+      if (result.meta) {
+        setTotalTickets(result.meta.total || 0);
+        setTotalPages(Math.max(1, result.meta.totalPages || 1));
+      } else {
+        setTotalTickets(loadedTickets.length);
+        setTotalPages(Math.ceil(loadedTickets.length / PAGE_LIMIT) || 1);
+      }
     } catch (err: any) {
       setError(err.message || 'Erro inesperado.');
     } finally {
@@ -109,15 +131,33 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    loadTickets();
+    loadTickets(page);
   }, [page, statusId, priority]);
 
-  // Filtro de digitação com delay
+  const handleStatusChange = (newStatusId: string) => {
+    setStatusId(newStatusId);
+    setPage(1);
+  };
+
+  const handlePriorityChange = (newPriority: string) => {
+    setPriority(newPriority);
+    setPage(1);
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
-    loadTickets();
+    loadTickets(1);
   };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusId('');
+    setPriority('');
+    setPage(1);
+  };
+
+  const hasActiveFilters = Boolean(search.trim() || statusId || priority);
 
   // Cores de prioridade personalizadas
   const getPriorityBadge = (p: string) => {
@@ -250,34 +290,52 @@ export default function DashboardPage() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Status Select */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium whitespace-nowrap"><Filter size={14} className="inline mr-1" /> Status:</span>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              <Filter size={14} className="inline mr-1" /> Status:
+            </span>
             <select
               value={statusId}
-              onChange={(e) => { setStatusId(e.target.value); setPage(1); }}
-              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400"
+              onChange={(e) => handleStatusChange(e.target.value)}
+              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400 cursor-pointer"
             >
               <option value="">Todos</option>
               {statuses.map((st) => (
-                <option key={st.id} value={st.id}>{st.name}</option>
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
               ))}
             </select>
           </div>
 
           {/* Priority Select */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium whitespace-nowrap"><Filter size={14} className="inline mr-1" /> Prioridade:</span>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              <Filter size={14} className="inline mr-1" /> Prioridade:
+            </span>
             <select
               value={priority}
-              onChange={(e) => { setPriority(e.target.value); setPage(1); }}
-              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400"
+              onChange={(e) => handlePriorityChange(e.target.value)}
+              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400 cursor-pointer"
             >
               <option value="">Todas</option>
-              <option value="LOW">Baixa</option>
-              <option value="MEDIUM">Média</option>
-              <option value="HIGH">Alta</option>
               <option value="URGENT">Urgente</option>
+              <option value="HIGH">Alta</option>
+              <option value="MEDIUM">Média</option>
+              <option value="LOW">Baixa</option>
             </select>
           </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5"
+              title="Limpar todos os filtros"
+            >
+              <RotateCcw size={12} /> Limpar
+            </button>
+          )}
         </div>
       </div>
 
@@ -294,7 +352,9 @@ export default function DashboardPage() {
           </div>
         ) : tickets.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-sm">
-            Nenhum chamado localizado para os filtros informados.
+            {hasActiveFilters 
+              ? 'Nenhum chamado localizado com os filtros selecionados.' 
+              : 'Nenhum chamado localizado para a sua conta.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -363,28 +423,56 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="p-4 bg-slate-950/20 border-t border-slate-900 flex items-center justify-between gap-4">
-            <span className="text-xs text-slate-500">
-              Página {page} de {totalPages}
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg border border-slate-700/50 transition-all cursor-pointer"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg border border-slate-700/50 transition-all cursor-pointer"
-              >
-                <ChevronRight size={16} />
-              </button>
+        {/* Pagination Footer (5 itens por página) */}
+        {!loading && !error && totalTickets > 0 && (
+          <div className="p-4 bg-slate-950/40 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-slate-400">
+              Mostrando <span className="font-semibold text-slate-200">{(page - 1) * PAGE_LIMIT + 1}</span> a{' '}
+              <span className="font-semibold text-slate-200">{Math.min(page * PAGE_LIMIT, totalTickets)}</span> de{' '}
+              <span className="font-semibold text-slate-200">{totalTickets}</span> chamados
             </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Anterior
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => {
+                    const isActive = num === page;
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setPage(num)}
+                        className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                            : 'bg-slate-900/60 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  Próxima <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -2,8 +2,20 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Search, Filter, AlertTriangle, AlertCircle, CheckCircle, CheckCircle2, Clock, Layers, UserCheck, PauseCircle } from 'lucide-react';
-import { formatDateTime } from '@/shared/utils/utils';
+import { 
+  Search, 
+  Filter, 
+  AlertTriangle, 
+  AlertCircle, 
+  CheckCircle2, 
+  Clock, 
+  Layers, 
+  UserCheck, 
+  PauseCircle, 
+  ChevronLeft, 
+  ChevronRight,
+  RotateCcw
+} from 'lucide-react';
 import { apiFetch } from '@/shared/utils/api';
 
 interface Ticket {
@@ -22,6 +34,15 @@ interface Ticket {
   createdAt: string;
 }
 
+const DEFAULT_STATUSES = [
+  { id: 'status-aberto', name: 'Aberto' },
+  { id: 'status-atendimento', name: 'Em Atendimento' },
+  { id: 'status-aguardando-solicitante', name: 'Aguardando resposta do solicitante' },
+  { id: 'status-encerrado', name: 'Encerrado' },
+];
+
+const PAGE_LIMIT = 5;
+
 export default function TicketQueuePage() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,8 +53,13 @@ export default function TicketQueuePage() {
   const [search, setSearch] = useState('');
   const [statusId, setStatusId] = useState('');
   const [priority, setPriority] = useState('');
-  
-  // Contadores analíticos
+
+  // Paginação (5 por página)
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTickets, setTotalTickets] = useState(0);
+
+  // Contadores analíticos da fila geral
   const [metrics, setMetrics] = useState({
     total: 0,
     open: 0,
@@ -42,7 +68,7 @@ export default function TicketQueuePage() {
   });
 
   // Lista de status carregada para os filtros
-  const [statuses, setStatuses] = useState<{ id: string; name: string }[]>([]);
+  const [statuses, setStatuses] = useState<{ id: string; name: string }[]>(DEFAULT_STATUSES);
 
   useEffect(() => {
     // Carrega dados da sessão do usuário
@@ -55,25 +81,78 @@ export default function TicketQueuePage() {
       })
       .catch((err) => console.error('Erro ao obter sessão:', err));
 
-    // Carrega filtros de status diretamente
+    // Carrega filtros de status com ordenação lógica do sistema
     apiFetch('/api/tickets/statuses')
-      .then((res) => res.json())
-      .then((data) => {
-        setStatuses(data || []);
+      .then((res) => {
+        if (!res.ok) throw new Error('Falha ao obter status');
+        return res.json();
       })
-      .catch((err) => console.error('Erro ao obter status:', err));
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        const orderWeight: Record<string, number> = {
+          'status-aberto': 1,
+          'Aberto': 1,
+          'status-atendimento': 2,
+          'Em Atendimento': 2,
+          'status-aguardando-solicitante': 3,
+          'Aguardando resposta do solicitante': 3,
+          'status-encerrado': 4,
+          'Encerrado': 4,
+        };
+
+        const sorted = [...list].sort((a, b) => {
+          const wA = orderWeight[a.id] ?? orderWeight[a.name] ?? 99;
+          const wB = orderWeight[b.id] ?? orderWeight[b.name] ?? 99;
+          return wA - wB;
+        });
+
+        if (sorted.length > 0) {
+          setStatuses(sorted);
+        }
+      })
+      .catch((err) => {
+        console.warn('Usando status padrão de fallback:', err);
+      });
+
+    // Carrega métricas gerais da fila
+    loadMetrics();
   }, []);
 
-  const loadQueue = async () => {
+  const loadMetrics = async () => {
+    try {
+      const response = await apiFetch('/api/tickets?limit=1000');
+      if (response.ok) {
+        const result = await response.json();
+        const allTickets = (result.data || []) as Ticket[];
+        const now = Date.now();
+        const total = result.meta?.total ?? allTickets.length;
+        const open = allTickets.filter((t) => t.status.name === 'Aberto').length;
+        const inProgress = allTickets.filter((t) => t.status.name === 'Em Atendimento').length;
+        const violated = allTickets.filter((t) => {
+          const isClosed = t.status.name === 'Encerrado' || t.status.isFinal;
+          const isPaused = t.status.name === 'Aguardando resposta do solicitante' || t.status.id === 'status-aguardando-solicitante' || !!t.slaPausedAt;
+          if (isClosed || isPaused) return false;
+          const deadline = t.slaDeadline ? new Date(t.slaDeadline).getTime() : null;
+          return t.slaViolated || (deadline !== null && now > deadline);
+        }).length;
+
+        setMetrics({ total, open, inProgress, violated });
+      }
+    } catch (err) {
+      console.error('Erro ao calcular métricas da fila:', err);
+    }
+  };
+
+  const loadQueue = async (targetPage = page) => {
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        page: '1',
-        limit: '50', // traz uma fila operacional maior
+        page: String(targetPage),
+        limit: String(PAGE_LIMIT),
       });
 
-      if (search) params.append('search', search);
+      if (search.trim()) params.append('search', search.trim());
       if (statusId) params.append('statusId', statusId);
       if (priority) params.append('priority', priority);
 
@@ -81,19 +160,18 @@ export default function TicketQueuePage() {
       if (!response.ok) {
         throw new Error('Falha ao carregar fila de chamados.');
       }
-      
+
       const result = await response.json();
-      const loadedTickets = result.data as Ticket[];
+      const loadedTickets = (result.data || []) as Ticket[];
       setTickets(loadedTickets);
 
-      // Calcular métricas rápidas em cima da listagem carregada
-      const total = loadedTickets.length;
-      const open = loadedTickets.filter((t) => t.status.name === 'Aberto').length;
-      const inProgress = loadedTickets.filter((t) => t.status.name === 'Em Atendimento').length;
-      const violated = loadedTickets.filter((t) => t.slaViolated).length;
-      
-      setMetrics({ total, open, inProgress, violated });
-
+      if (result.meta) {
+        setTotalTickets(result.meta.total || 0);
+        setTotalPages(Math.max(1, result.meta.totalPages || 1));
+      } else {
+        setTotalTickets(loadedTickets.length);
+        setTotalPages(Math.ceil(loadedTickets.length / PAGE_LIMIT) || 1);
+      }
     } catch (err: any) {
       setError(err.message || 'Erro inesperado.');
     } finally {
@@ -102,24 +180,44 @@ export default function TicketQueuePage() {
   };
 
   useEffect(() => {
-    loadQueue();
-  }, [statusId, priority]);
+    loadQueue(page);
+  }, [page, statusId, priority]);
+
+  const handleStatusChange = (newStatusId: string) => {
+    setStatusId(newStatusId);
+    setPage(1);
+  };
+
+  const handlePriorityChange = (newPriority: string) => {
+    setPriority(newPriority);
+    setPage(1);
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    loadQueue();
+    setPage(1);
+    loadQueue(1);
   };
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setStatusId('');
+    setPriority('');
+    setPage(1);
+  };
+
+  const hasActiveFilters = Boolean(search.trim() || statusId || priority);
 
   const getPriorityBadge = (p: string) => {
     switch (p) {
       case 'URGENT':
-        return <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-xs px-2 py-0.5 rounded-full">Urgente</span>;
+        return <span className="bg-red-500/10 text-red-400 border border-red-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">Urgente</span>;
       case 'HIGH':
-        return <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs px-2 py-0.5 rounded-full font-medium">Alta</span>;
+        return <span className="bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">Alta</span>;
       case 'MEDIUM':
-        return <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2 py-0.5 rounded-full font-medium">Média</span>;
+        return <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">Média</span>;
       default:
-        return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-xs px-2 py-0.5 rounded-full font-medium">Baixa</span>;
+        return <span className="bg-slate-500/10 text-slate-400 border border-slate-500/20 text-xs px-2.5 py-0.5 rounded-full font-medium">Baixa</span>;
     }
   };
 
@@ -172,7 +270,7 @@ export default function TicketQueuePage() {
     const remMins = Math.floor(diffMs / 60000);
     const remHours = Math.floor(remMins / 60);
     const remDays = Math.floor(remHours / 24);
-    const isUrgentNotice = remHours < 2; // menos de 2 horas restantes
+    const isUrgentNotice = remHours < 2;
 
     let remText = '';
     if (remDays > 0) {
@@ -199,6 +297,9 @@ export default function TicketQueuePage() {
     );
   };
 
+  const openStatusId = statuses.find((s) => s.name === 'Aberto')?.id || 'status-aberto';
+  const inProgressStatusId = statuses.find((s) => s.name === 'Em Atendimento')?.id || 'status-atendimento';
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -209,11 +310,17 @@ export default function TicketQueuePage() {
         <p className="text-sm text-slate-400">Painel operacional para triagem, designação de responsabilidade e SLA.</p>
       </div>
 
-      {/* Metrics Row */}
+      {/* Metrics Row (Cards interativos de atalho rápido) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Total Card */}
-        <div className="glass-panel p-4 rounded-xl flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusChange('')}
+          className={`glass-panel p-4 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer hover:border-sky-500/40 ${
+            statusId === '' ? 'ring-1 ring-sky-500/50 bg-sky-500/5' : ''
+          }`}
+        >
           <div>
             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Fila Geral</span>
             <span className="text-2xl font-bold text-slate-100 mt-1 block">{metrics.total}</span>
@@ -221,10 +328,16 @@ export default function TicketQueuePage() {
           <div className="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400">
             <Layers size={20} />
           </div>
-        </div>
+        </button>
 
         {/* Open Card */}
-        <div className="glass-panel p-4 rounded-xl flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusChange(openStatusId)}
+          className={`glass-panel p-4 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer hover:border-amber-500/40 ${
+            statusId === openStatusId ? 'ring-1 ring-amber-500/50 bg-amber-500/5' : ''
+          }`}
+        >
           <div>
             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Aguardando Triagem</span>
             <span className="text-2xl font-bold text-slate-100 mt-1 block">{metrics.open}</span>
@@ -232,10 +345,16 @@ export default function TicketQueuePage() {
           <div className="w-10 h-10 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
             <Clock size={20} />
           </div>
-        </div>
+        </button>
 
         {/* In Progress Card */}
-        <div className="glass-panel p-4 rounded-xl flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => handleStatusChange(inProgressStatusId)}
+          className={`glass-panel p-4 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer hover:border-purple-500/40 ${
+            statusId === inProgressStatusId ? 'ring-1 ring-purple-500/50 bg-purple-500/5' : ''
+          }`}
+        >
           <div>
             <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Em Atendimento</span>
             <span className="text-2xl font-bold text-slate-100 mt-1 block">{metrics.inProgress}</span>
@@ -243,7 +362,7 @@ export default function TicketQueuePage() {
           <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
             <UserCheck size={20} />
           </div>
-        </div>
+        </button>
 
         {/* Violated Card */}
         <div className="glass-panel p-4 rounded-xl flex items-center justify-between border-red-500/20">
@@ -258,7 +377,7 @@ export default function TicketQueuePage() {
 
       </div>
 
-      {/* Filters */}
+      {/* Filters Toolbar */}
       <div className="glass-panel p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2">
           <div className="relative flex-1">
@@ -282,34 +401,54 @@ export default function TicketQueuePage() {
         </form>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Status Filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium whitespace-nowrap"><Filter size={14} className="inline mr-1" /> Status:</span>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              <Filter size={14} className="inline mr-1" /> Status:
+            </span>
             <select
               value={statusId}
-              onChange={(e) => setStatusId(e.target.value)}
-              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400"
+              onChange={(e) => handleStatusChange(e.target.value)}
+              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400 cursor-pointer"
             >
               <option value="">Todos</option>
               {statuses.map((st) => (
-                <option key={st.id} value={st.id}>{st.name}</option>
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
               ))}
             </select>
           </div>
 
+          {/* Priority Filter */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500 font-medium whitespace-nowrap"><Filter size={14} className="inline mr-1" /> Prioridade:</span>
+            <span className="text-xs text-slate-500 font-medium whitespace-nowrap">
+              <Filter size={14} className="inline mr-1" /> Prioridade:
+            </span>
             <select
               value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400"
+              onChange={(e) => handlePriorityChange(e.target.value)}
+              className="bg-slate-950/40 border border-slate-950 rounded-lg text-slate-300 py-1.5 px-3 text-xs focus:outline-none focus:border-sky-400 cursor-pointer"
             >
               <option value="">Todas</option>
-              <option value="LOW">Baixa</option>
-              <option value="MEDIUM">Média</option>
-              <option value="HIGH">Alta</option>
               <option value="URGENT">Urgente</option>
+              <option value="HIGH">Alta</option>
+              <option value="MEDIUM">Média</option>
+              <option value="LOW">Baixa</option>
             </select>
           </div>
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 rounded-lg text-xs transition-all cursor-pointer flex items-center gap-1.5"
+              title="Limpar todos os filtros"
+            >
+              <RotateCcw size={12} /> Limpar
+            </button>
+          )}
         </div>
       </div>
 
@@ -326,7 +465,9 @@ export default function TicketQueuePage() {
           </div>
         ) : tickets.length === 0 ? (
           <div className="p-12 text-center text-slate-500 text-sm">
-            Fila vazia! Nenhum chamado aguardando atendimento.
+            {hasActiveFilters
+              ? 'Nenhum chamado localizado com os filtros selecionados.'
+              : 'Fila vazia! Nenhum chamado aguardando atendimento.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -405,6 +546,59 @@ export default function TicketQueuePage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Pagination Footer (5 itens por página) */}
+        {!loading && !error && totalTickets > 0 && (
+          <div className="p-4 bg-slate-950/40 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-xs text-slate-400">
+              Mostrando <span className="font-semibold text-slate-200">{(page - 1) * PAGE_LIMIT + 1}</span> a{' '}
+              <span className="font-semibold text-slate-200">{Math.min(page * PAGE_LIMIT, totalTickets)}</span> de{' '}
+              <span className="font-semibold text-slate-200">{totalTickets}</span> chamados
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft size={14} /> Anterior
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => {
+                    const isActive = num === page;
+                    return (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setPage(num)}
+                        className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          isActive
+                            ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                            : 'bg-slate-900/60 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium transition-all flex items-center gap-1 cursor-pointer"
+                >
+                  Próxima <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
